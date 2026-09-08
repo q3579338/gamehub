@@ -1,0 +1,145 @@
+{
+  "site": {
+    "domain": "game.satloot.com",
+    "title": "satloot 游戏厅",
+    "titleEn": "satloot arcade",
+    "tagline": "GitHub 上的小游戏，全部单文件、零依赖、打开即玩",
+    "taglineEn": "Tiny games from GitHub. Single-file, zero dependency, click and play.",
+    "github": "https://github.com/q3579338",
+    "family": [
+      {
+        "name": "satloot.com",
+        "url": "https://satloot.com",
+        "desc": "项目总览 · 全部站点与开源仓库"
+      },
+      {
+        "name": "sim.satloot.com",
+        "url": "https://sim.satloot.com",
+        "desc": "合约模拟器 · 真实行情 + 模拟资金"
+      },
+      {
+        "name": "bnbbang.com",
+        "url": "https://bnbbang.com",
+        "desc": "镜像宇宙 BNBBANG · 每个 BNB 区块哈希都是一个宇宙"
+      },
+      {
+        "name": "earn.satloot.com",
+        "url": "https://earn.satloot.com",
+        "desc": "riskdesk · 加密市场扫描与交易风控面板"
+      },
+      {
+        "name": "airdrop.satloot.com",
+        "url": "https://airdrop.satloot.com",
+        "desc": "空投雷达 · 进行中的空投项目一览"
+      },
+      {
+        "name": "tool.satloot.com",
+        "url": "https://tool.satloot.com",
+        "desc": "satloot 工具站 · 客户端下载"
+      },
+      {
+        "name": "faucet.satloot.com",
+        "url": "https://faucet.satloot.com",
+        "desc": "比特币测试网水龙头"
+      }
+    ]
+  },
+  "games": [
+    {
+      "id": "tuanzi-food",
+      "title": "团子的美食大冒险 3D",
+      "titleEn": "Tuanzi Feast Adventure 3D",
+      "desc": "吃出健康的 3D 跑酷：绿泡健康食品要吃，红泡垃圾食品要躲。9 大地图轮换、无限连闯、连击倍率、1100 件装扮扭蛋、家园布置与美食图鉴。",
+      "descEn": "Eat-healthy 3D runner: grab green bubbles, dodge red junk food. 9 maps, endless levels, combo multipliers, 1100-piece gacha wardrobe, home decor and a food codex.",
+      "kind": "3D",
+      "engine": "Three.js",
+      "tags": [
+        "跑酷",
+        "扭蛋收集",
+        "键盘+触屏"
+      ],
+      "controls": "←→ / A D 移动 · 空格 / W 跳跃 · Esc 暂停 · 触屏：左右半屏移动，右下角跳",
+      "repo": "q3579338/tuanzi-food",
+      "public": false,
+      "dist": "dist/tuanzi3d.html",
+      "shot": "lv=2&seed=7&god=1&still=4500",
+      "featured": true
+    },
+    {
+      "id": "tuanzi-kart3d",
+      "title": "团子卡丁车 3D",
+      "titleEn": "Tuanzi Kart 3D",
+      "desc": "8 车竞速的 3D 卡丁车：3 条主题赛道、9 位动物车手、跑跑卡丁车式漂移蓄氮气、问号箱道具、车库图鉴与抽奖，HUD 带小地图与最佳单圈。",
+      "descEn": "8-kart 3D racer: 3 themed tracks, 9 animal drivers, drift-to-charge nitro, item boxes, garage, codex and gacha. Full racing HUD with minimap and best lap.",
+      "kind": "3D",
+      "engine": "Three.js",
+      "tags": [
+        "竞速",
+        "漂移氮气",
+        "键盘+触屏"
+      ],
+      "controls": "W 油门 · S 刹车 · A D / ←→ 转向 · Shift 漂移蓄氮 · 空格 放氮气 · E 道具 · Esc 暂停",
+      "repo": "q3579338/tuanzi-kart3d",
+      "public": false,
+      "dist": "dist/tuanzi3d.html",
+      "shot": "track=1&auto=1&seed=7&still=6000"
+    },
+    {
+      "id": "tuanzi3d",
+      "title": "团子的森林大冒险 3D",
+      "titleEn": "Tuanzi Forest Adventure 3D",
+      "desc": "系列的起点：9 关 × 3 大群系的 3D 跑酷躲避，10 种障碍与怪物，三档难度，金币换装衣橱。赛璐璐渲染 + Bloom 后处理，程序化天空与粒子，全部无外部资源。",
+      "descEn": "Where the series began: 9 levels across 3 biomes, 10 obstacle types, 3 difficulties and a coin-powered wardrobe. Cel-shaded with bloom, fully procedural.",
+      "kind": "3D",
+      "engine": "Three.js",
+      "tags": [
+        "跑酷",
+        "换装",
+        "键盘+触屏"
+      ],
+      "controls": "←→ / A D 移动 · 空格 / W 跳跃（可变跳高）· Esc 暂停 · 触屏：左右半屏移动，右下角跳",
+      "repo": "q3579338/tuanzi3d",
+      "public": false,
+      "dist": "dist/tuanzi3d.html",
+      "shot": "lv=3&seed=7&god=1&still=4500"
+    },
+    {
+      "id": "tuanzi-tetris",
+      "title": "团子俄罗斯方块",
+      "titleEn": "Tuanzi Tetris",
+      "desc": "糖果画风、现代标准手感的俄罗斯方块：7-bag 随机、SRS 旋转踢墙、锁延迟、Hold 暂存、影子预览、T-Spin、Back-to-Back 与 Combo 计分，DAS/ARR 跟手。",
+      "descEn": "Candy-styled Tetris with modern guideline feel: 7-bag, SRS kicks, lock delay, hold, ghost piece, T-Spin, back-to-back and combo scoring, tuned DAS/ARR.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "经典",
+        "SRS",
+        "键盘+触屏"
+      ],
+      "controls": "←→ 移动 · ↓ 软降 · 空格 硬降 · ↑ / X 顺旋 · Z 逆旋 · C / Shift 暂存 · P / Esc 暂停 · 触屏滑动与点击",
+      "repo": "q3579338/tuanzi-tetris",
+      "public": false,
+      "dist": "dist/tetris.html",
+      "shot": "lv=1&seed=7&still=3000"
+    },
+    {
+      "id": "fruit-match3",
+      "title": "水果消消乐",
+      "titleEn": "Fruit Match-3",
+      "desc": "手绘六种水果的三消：4 连出消除条、L/T 形出炸弹、5 连出彩虹球，特殊块连环引爆，掉落连锁 Combo 倍率递增。8 个关卡，星级评定，死局自动洗牌。",
+      "descEn": "Hand-drawn match-3 with six fruits: line clears, bombs and rainbow balls that chain-detonate, cascade combos, 8 levels with star ratings and auto-reshuffle.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "三消",
+        "休闲",
+        "鼠标+触屏"
+      ],
+      "controls": "点击相邻两个水果交换，或按住拖动 · 三个以上连成一线即消除",
+      "repo": "q3579338/fruit-match3",
+      "public": false,
+      "dist": "dist/fruit.html",
+      "shot": "lv=2&seed=7&still=1500"
+    }
+  ]
+}

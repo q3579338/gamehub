@@ -1,0 +1,10 @@
+node_modules/
+upstream/
+site/g/
+site/games.json
+site/index.html
+site/play/index.html
+site/robots.txt
+site/sitemap.xml
+.shots-tmp/
+*.log
