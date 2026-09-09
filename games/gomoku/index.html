@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>五子棋</title>
+<style>
+:root{--bg:#f3ede3;--ink:#3b2f24;--ink2:#8c7b6a;--acc:#b5651d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 6px;flex-wrap:wrap}
+.ttl{font-size:22px;font-weight:900;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin-top:5px}
+.turn{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e6dccb;border-radius:8px;padding:6px 12px;font-weight:700}
+.turn i{width:18px;height:18px;border-radius:50%;display:inline-block;box-shadow:inset -3px -3px 6px rgba(0,0,0,.35)}
+.turn i.b{background:#222}.turn i.w{background:#fafafa;border:1px solid #bbb}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:8px 12px;background:var(--acc);color:#fff;cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:#e9e0d0;color:var(--ink)}
+select{font:inherit;font-weight:700;border:1px solid #e6dccb;border-radius:8px;padding:7px 8px;background:#fff;color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:4px 10px 10px;min-height:0}
+canvas{display:block;touch-action:none;border-radius:8px;box-shadow:0 16px 40px -16px rgba(59,47,36,.6)}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(243,237,227,.55);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 20px 60px -20px rgba(59,47,36,.5);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:26px;font-weight:900}
+.panel p{margin:0 0 16px;color:var(--ink2);font-size:14px}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">⚫ 五子棋<small>横竖斜先连成五子者胜</small></div>
+  <select id="mode"><option value="ai">人机 · 我执黑</option><option value="ai2">人机 · 我执白</option><option value="pvp">双人对战</option></select>
+  <div class="turn"><i id="turnDot" class="b"></i><span id="turnTxt">黑方走</span></div>
+  <button class="ghost" id="btnUndo" title="悔棋 (Z)">↶ 悔棋</button>
+  <button id="btnNew" title="重开 (R)">重开</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov" hidden><div class="panel"><h2 id="ovT"></h2><p id="ovP"></p><div class="row" id="ovB"></div></div></div>
+</div>
+<div class="tip">鼠标：移到交叉点点击落子 · 触屏：点一下预览，再点同一位置确认 · Z 悔棋 · R 重开</div>
+<script>
+'use strict';
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const KEY = 'gh:gomoku:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const N = 15; let cell = 30, pad = 20, side = 480;
+let board = new Int8Array(N * N), turn = 1, hist = [], winLine = null, mode = store.get('mode', 'ai'), over = false, ghost = -1, thinking = false;
+const aiColor = () => mode === 'ai' ? 2 : mode === 'ai2' ? 1 : 0;
+const DIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+
+function reset() { board = new Int8Array(N * N); turn = 1; hist = []; winLine = null; over = false; ghost = -1; thinking = false; hideOv(); hud(); draw(); if (aiColor() === 1) setTimeout(aiMove, 300); }
+function hud() { $('#turnDot').className = turn === 1 ? 'b' : 'w'; const who = turn === 1 ? '黑方' : '白方'; $('#turnTxt').textContent = over ? '已结束' : thinking ? '电脑思考中…' : (aiColor() === turn ? '电脑（' + who + '）走' : who + '走'); $('#btnUndo').disabled = !hist.length || thinking; $('#btnUndo').style.opacity = hist.length && !thinking ? 1 : .5; }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').innerHTML = p; const b = $('#ovB'); b.innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+
+function checkWin(i) {
+  const x = i % N, y = (i / N) | 0, who = board[i];
+  for (const [dx, dy] of DIRS) {
+    const cells = [i]; for (const s of [1, -1]) { let k = 1; while (true) { const nx = x + dx * k * s, ny = y + dy * k * s; if (nx < 0 || nx >= N || ny < 0 || ny >= N || board[ny * N + nx] !== who) break; cells.push(ny * N + nx); k++; } }
+    if (cells.length >= 5) return cells;
+  }
+  return null;
+}
+function place(i) {
+  if (over || board[i]) return false;
+  board[i] = turn; hist.push(i); ghost = -1; SFX.tone(turn === 1 ? 420 : 520, 0.05, 'triangle', 0.12, 300);
+  const w = checkWin(i);
+  if (w) { over = true; winLine = w; SFX.tone(660, 0.15, 'square', 0.1, 990); setTimeout(() => SFX.tone(990, 0.3, 'square', 0.1, 1320), 150); const name = turn === 1 ? '黑方' : '白方'; const ai = aiColor(), winner = turn; setTimeout(() => showOv(ai ? (ai === winner ? '😅 电脑赢了' : '🎉 你赢了！') : name + ' 胜！', `共 ${hist.length} 手`, [['再来一局', reset]]), 400); }
+  else if (hist.length === N * N) { over = true; setTimeout(() => showOv('平局', '棋盘下满了', [['再来一局', reset]]), 300); }
+  turn = 3 - turn; hud(); draw();
+  if (!over && aiColor() === turn) { thinking = true; hud(); setTimeout(aiMove, 120 + Math.random() * 200); }
+  return true;
+}
+function undo() { if (!hist.length || thinking) return; const n = aiColor() && hist.length >= 2 && aiColor() !== turn ? 2 : 1; for (let k = 0; k < n && hist.length; k++) { board[hist.pop()] = 0; turn = 3 - turn; } over = false; winLine = null; hideOv(); hud(); draw(); }
+
+// ---- AI：逐点评估（进攻 + 防守） ----
+function lineScore(x, y, dx, dy, who) {
+  let n = 1, open = 0;
+  for (const s of [1, -1]) { let k = 1; while (true) { const nx = x + dx * k * s, ny = y + dy * k * s; if (nx < 0 || nx >= N || ny < 0 || ny >= N) break; const v = board[ny * N + nx]; if (v === who) { n++; k++; continue; } if (v === 0) open++; break; } }
+  if (n >= 5) return 1e6;
+  if (n === 4) return open === 2 ? 1e5 : open === 1 ? 1.2e4 : 0;
+  if (n === 3) return open === 2 ? 6000 : open === 1 ? 600 : 0;
+  if (n === 2) return open === 2 ? 350 : open === 1 ? 60 : 0;
+  return open === 2 ? 30 : open === 1 ? 8 : 0;
+}
+function cellScore(i, who) { const x = i % N, y = (i / N) | 0; let s = 0, fours = 0, threes = 0; for (const [dx, dy] of DIRS) { const v = lineScore(x, y, dx, dy, who); s += v; if (v >= 1.2e4 && v < 1e6) fours++; if (v >= 6000 && v < 1.2e4) threes++; } if (fours >= 2 || (fours && threes)) s += 5e4; if (threes >= 2) s += 1.5e4; return s; }
+function aiMove() {
+  if (over) return; const me = turn, op = 3 - turn;
+  if (!hist.length) { thinking = false; return place(Math.floor(N / 2) * N + Math.floor(N / 2)); }
+  let best = -1, bestV = -Infinity; const c = (N - 1) / 2;
+  for (let i = 0; i < N * N; i++) {
+    if (board[i]) continue; const x = i % N, y = (i / N) | 0; let near = false;
+    for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) { const nx = x + dx, ny = y + dy; if (nx >= 0 && nx < N && ny >= 0 && ny < N && board[ny * N + nx]) { near = true; break; } }
+    if (!near) continue;
+    const atk = cellScore(i, me), def = cellScore(i, op);
+    let v = atk >= 1e6 ? 1e7 : def >= 1e6 ? 5e6 : atk + def * 0.9; v += rnd() * 6 - (Math.abs(x - c) + Math.abs(y - c)) * 0.5;
+    if (v > bestV) { bestV = v; best = i; }
+  }
+  thinking = false; if (best >= 0) place(best); else hud();
+}
+
+// ---- 绘制 ----
+function layout() { const st = $('.stage'); side = Math.max(280, Math.min(640, st.clientWidth - 20, st.clientHeight - 14)); cell = side / (N + 1); pad = cell; const dpr = Math.min(window.devicePixelRatio || 1, 3); cv.style.width = cv.style.height = side + 'px'; cv.width = cv.height = Math.round(side * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
+const px = i => pad + (i % N) * cell, py = i => pad + ((i / N) | 0) * cell;
+function draw() {
+  const g = ctx.createLinearGradient(0, 0, side, side); g.addColorStop(0, '#e8c48a'); g.addColorStop(1, '#d9a95f'); ctx.fillStyle = g; ctx.fillRect(0, 0, side, side);
+  ctx.strokeStyle = 'rgba(90,60,20,.12)'; ctx.lineWidth = 1; for (let k = 0; k < 40; k++) { ctx.beginPath(); ctx.moveTo(0, k * side / 40 + Math.sin(k) * 6); ctx.bezierCurveTo(side / 3, k * side / 40 + 8, side * 2 / 3, k * side / 40 - 8, side, k * side / 40 + Math.cos(k) * 6); ctx.stroke(); }
+  ctx.strokeStyle = '#5a3d1a'; ctx.lineWidth = 1;
+  for (let k = 0; k < N; k++) { ctx.beginPath(); ctx.moveTo(pad, pad + k * cell); ctx.lineTo(pad + (N - 1) * cell, pad + k * cell); ctx.stroke(); ctx.beginPath(); ctx.moveTo(pad + k * cell, pad); ctx.lineTo(pad + k * cell, pad + (N - 1) * cell); ctx.stroke(); }
+  ctx.fillStyle = '#5a3d1a'; for (const [x, y] of [[3, 3], [11, 3], [3, 11], [11, 11], [7, 7]]) { ctx.beginPath(); ctx.arc(pad + x * cell, pad + y * cell, cell * 0.11, 0, Math.PI * 2); ctx.fill(); }
+  const r = cell * 0.44;
+  for (let i = 0; i < N * N; i++) if (board[i]) stone(px(i), py(i), r, board[i], 1);
+  if (ghost >= 0 && !board[ghost] && !over) stone(px(ghost), py(ghost), r, turn, 0.45);
+  const last = hist[hist.length - 1]; if (last != null) { ctx.fillStyle = board[last] === 1 ? '#fff' : '#222'; ctx.beginPath(); ctx.arc(px(last), py(last), r * 0.22, 0, Math.PI * 2); ctx.fill(); }
+  if (winLine) { const xs = winLine.map(px), ys = winLine.map(py); let i1 = 0, i2 = 0; for (let k = 1; k < winLine.length; k++) { if (xs[k] < xs[i1] || (xs[k] === xs[i1] && ys[k] < ys[i1])) i1 = k; if (xs[k] > xs[i2] || (xs[k] === xs[i2] && ys[k] > ys[i2])) i2 = k; } ctx.strokeStyle = 'rgba(255,60,60,.85)'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(xs[i1], ys[i1]); ctx.lineTo(xs[i2], ys[i2]); ctx.stroke(); }
+}
+function stone(x, y, r, who, a) {
+  ctx.globalAlpha = a; ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = r * 0.5; ctx.shadowOffsetY = r * 0.15;
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r); if (who === 1) { g.addColorStop(0, '#666'); g.addColorStop(1, '#111'); } else { g.addColorStop(0, '#fff'); g.addColorStop(1, '#cfcfcf'); }
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.globalAlpha = 1;
+}
+const cellAt = e => { const rc = cv.getBoundingClientRect(); const x = Math.round((e.clientX - rc.left - pad) / cell), y = Math.round((e.clientY - rc.top - pad) / cell); return x >= 0 && x < N && y >= 0 && y < N ? y * N + x : -1; };
+cv.addEventListener('pointermove', e => { if (e.pointerType !== 'mouse') return; const i = cellAt(e); if (i !== ghost) { ghost = i; draw(); } });
+cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { ghost = -1; draw(); } });
+cv.addEventListener('pointerdown', e => { SFX.unlock(); e.preventDefault(); if (over || thinking || aiColor() === turn) return; const i = cellAt(e); if (i < 0 || board[i]) return; if (e.pointerType === 'mouse' || ghost === i) place(i); else { ghost = i; SFX.tone(300, 0.03, 'sine', 0.05); draw(); } });
+$('#btnNew').onclick = reset; $('#btnUndo').onclick = undo;
+$('#mode').value = mode; $('#mode').onchange = e => { mode = e.target.value; store.set('mode', mode); reset(); };
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('keydown', e => { if (e.key === 'z' || e.key === 'Z') undo(); else if (e.key === 'r' || e.key === 'R') reset(); });
+window.addEventListener('resize', layout);
+
+if (STILL) {
+  mode = 'pvp'; $('#mode').value = mode; const seq = [[7, 7], [7, 8], [8, 8], [6, 6], [6, 8], [8, 6], [9, 9], [5, 5], [8, 7], [6, 7], [9, 6], [7, 6], [10, 5], [4, 9], [6, 9], [5, 8], [9, 8], [10, 9]];
+  for (const [x, y] of seq) { board[y * N + x] = turn; hist.push(y * N + x); turn = 3 - turn; }
+  hud(); document.title = 'STILL-READY'; let n = 0; (function redraw() { layout(); if (++n < 10) requestAnimationFrame(redraw); })();
+} else { reset(); layout(); requestAnimationFrame(layout); }
+</script>
+</body>
+</html>

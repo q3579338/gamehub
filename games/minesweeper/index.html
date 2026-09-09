@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>扫雷</title>
+<style>
+:root{--bg:#eef2f7;--ink:#1e293b;--ink2:#64748b;--acc:#2563eb}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 8px;flex-wrap:wrap}
+.ttl{font-size:22px;font-weight:900;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin-top:5px}
+.stat{background:#1e293b;color:#f87171;border-radius:8px;padding:4px 10px;min-width:64px;text-align:center;font:900 22px "Consolas","Menlo",monospace;letter-spacing:1px}
+.stat span{display:block;font:700 10px sans-serif;letter-spacing:.8px;color:#94a3b8}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:8px 12px;background:var(--acc);color:#fff;cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:#dde3ec;color:var(--ink)}
+button.on{background:#f59e0b;color:#fff}
+#face{font-size:22px;padding:4px 10px;background:#fff;border:1px solid #cbd5e1}
+select{font:inherit;font-weight:700;border:1px solid #cbd5e1;border-radius:8px;padding:7px 8px;background:#fff;color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:flex-start;justify-content:center;padding:4px 10px 10px;min-height:0;overflow:auto}
+canvas{display:block;touch-action:none;border-radius:8px;box-shadow:0 12px 30px -14px rgba(30,41,59,.5);margin:auto}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(238,242,247,.6);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 20px 60px -20px rgba(30,41,59,.5);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:26px;font-weight:900}
+.panel p{margin:0 0 16px;color:var(--ink2);font-size:14px}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">💣 扫雷<small>数字 = 周围地雷数，全部排干净</small></div>
+  <select id="diff"><option value="0">初级 9×9 · 10 雷</option><option value="1">中级 16×16 · 40 雷</option><option value="2">高级 30×16 · 99 雷</option></select>
+  <div class="stat"><span>剩余雷</span><b id="mines">010</b></div>
+  <button id="face" title="新局">🙂</button>
+  <div class="stat"><span>秒</span><b id="time">000</b></div>
+  <button class="ghost" id="btnFlag" title="切换点击=插旗（触屏用）">🚩 插旗</button>
+  <button class="ghost" id="btnLB" title="英雄榜">🏆</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov" hidden>
+    <div class="panel"><h2 id="ovT"></h2><p id="ovP"></p><div id="ovLB"></div><div class="row" id="ovB"></div></div>
+  </div>
+</div>
+<div class="tip">左键翻开 · 右键 / 长按插旗 · 点数字连锁翻开（旗数够时）· 手机用「插旗」按钮切换模式</div>
+<script>
+'use strict';
+/* @lb-start */
+/* 英雄榜客户端（由 tools/inject.mjs 注入到每个自制游戏，源文件 games/_shared/leaderboard.js，改这里再 node tools/inject.mjs） */
+const LB = (() => {
+  const API = '/api/scores', CAP = 20, NAME_KEY = 'gh:name';
+  const enabled = /^https?:$/.test(location.protocol);
+  const getName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+  const setName = n => { try { localStorage.setItem(NAME_KEY, n); } catch (e) {} };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CSS = `.lb-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.lb-panel{width:min(92vw,420px);max-height:86vh;overflow:auto;background:#161b2c;color:#e8ecf5;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 70px -20px rgba(0,0,0,.8);position:relative}
+.lb-panel h3{margin:0 0 4px;font-size:18px;font-weight:900;padding-right:36px}.lb-panel h3 small{color:#8b93a7;font-weight:500;font-size:12px;margin-left:8px}
+.lb-x{position:absolute;right:10px;top:10px;width:30px;height:30px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8ecf5;font-size:16px;cursor:pointer}
+.lb-tabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}.lb-tabs button{font:inherit;font-size:12.5px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab3c8;border-radius:999px;padding:5px 11px;cursor:pointer}.lb-tabs button.on{background:#ffd166;color:#1a1200;border-color:#ffd166}
+.lb-list{list-style:none;margin:0;padding:0}.lb-list li{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:14px}.lb-list li:nth-child(1) .lb-rk{background:#ffd166;color:#1a1200}.lb-list li:nth-child(2) .lb-rk{background:#cfd6e4;color:#1a1200}.lb-list li:nth-child(3) .lb-rk{background:#d9a066;color:#1a1200}
+.lb-rk{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex:none}.lb-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.lb-sc{font-weight:800;white-space:nowrap}.lb-dt{color:#5f677a;font-size:11.5px;white-space:nowrap}
+.lb-empty,.lb-note{color:#8b93a7;font-size:13px;text-align:center;padding:14px 0}.lb-list li.me{background:rgba(255,209,102,.12);border-radius:8px}
+.lb-offer{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);text-align:left;font-size:13.5px;line-height:1.5;color:inherit}
+.lb-offer b{color:#d98f00}.lb-offer .row{display:flex;gap:8px;margin-top:8px}.lb-offer input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.4);background:rgba(255,255,255,.9);color:#111}
+.lb-offer button{font:inherit;font-weight:800;font-size:13.5px;border:0;border-radius:8px;padding:8px 12px;background:#ffb703;color:#1a1200;cursor:pointer;white-space:nowrap}.lb-offer button[disabled]{opacity:.6;cursor:default}.lb-offer a{color:#d98f00;font-weight:700;cursor:pointer;text-decoration:underline}
+.lb-offer .ok{color:#2a9d4a;font-weight:800}`;
+  function ensureCss() { if (!document.getElementById('lb-css')) { const s = document.createElement('style'); s.id = 'lb-css'; s.textContent = CSS; document.head.appendChild(s); } }
+  const fmtDate = at => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  async function fetchList(game, board, limit = CAP) { const r = await fetch(`${API}?game=${encodeURIComponent(game)}&board=${encodeURIComponent(board)}&limit=${limit}`, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status); return r.json(); }
+  async function submit(game, board, name, score, meta) { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game, board, name, score, meta }) }); const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || ('http ' + r.status)); return j; }
+  const qualifies = (list, dir, score) => list.length < CAP || (dir === 'desc' ? score > list[list.length - 1].score : score < list[list.length - 1].score);
+  function renderList(ul, list, fmt, meId) {
+    ul.innerHTML = list.length ? list.map(e => `<li${meId && e.id === meId ? ' class="me"' : ''}><span class="lb-rk">${e.rank}</span><span class="lb-nm">${esc(e.name)}</span><span class="lb-sc">${esc(fmt(e.score, e))}</span><span class="lb-dt">${fmtDate(e.at)}</span></li>`).join('') : '<li class="lb-empty">还没有人上榜，来当第一个！</li>';
+  }
+  // 弹出榜单：boards = [{key,label}]，fmt(score, entry) → 显示文本
+  async function show(game, boards, fmt, title = '🏆 英雄榜') {
+    if (!enabled) return alert('英雄榜需要在线打开（game.satloot.com）');
+    ensureCss(); if (typeof boards === 'string') boards = [{ key: boards, label: '' }];
+    const ov = document.createElement('div'); ov.className = 'lb-ov';
+    ov.innerHTML = `<div class="lb-panel"><button class="lb-x" title="关闭">✕</button><h3>${esc(title)}<small>前 ${CAP} 名</small></h3>${boards.length > 1 ? `<div class="lb-tabs">${boards.map((b, i) => `<button data-k="${esc(b.key)}"${i ? '' : ' class="on"'}>${esc(b.label)}</button>`).join('')}</div>` : ''}<ul class="lb-list"><li class="lb-empty">加载中…</li></ul></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove(); ov.querySelector('.lb-x').onclick = close; ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); window.removeEventListener('keydown', onKey, true); } }; window.addEventListener('keydown', onKey, true);
+    const ul = ov.querySelector('.lb-list');
+    const loadBoard = async k => { ul.innerHTML = '<li class="lb-empty">加载中…</li>'; try { const j = await fetchList(game, k); renderList(ul, j.list, fmt); } catch (e) { ul.innerHTML = '<li class="lb-empty">榜单暂时打不开</li>'; } };
+    ov.querySelectorAll('.lb-tabs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.lb-tabs button').forEach(x => x.classList.toggle('on', x === b)); loadBoard(b.dataset.k); });
+    loadBoard(boards[0].key);
+  }
+  // 在结算面板里给出「留名上榜」：host 为容器元素
+  function offer(host, { game, board, score, meta, fmt, boards, title }) {
+    if (!host) return; host.innerHTML = '';
+    if (!enabled || !(score > 0)) return;
+    ensureCss(); const box = document.createElement('div'); box.className = 'lb-offer'; box.innerHTML = '🏆 英雄榜 · 查询中…'; host.appendChild(box);
+    const showLink = () => `<a class="lb-view">查看榜单</a>`;
+    const bind = () => { const a = box.querySelector('.lb-view'); if (a) a.onclick = () => show(game, boards || board, fmt, title); };
+    fetchList(game, board).then(j => {
+      if (!qualifies(j.list, j.dir, score)) { box.innerHTML = `本局 <b>${esc(fmt(score, { meta }))}</b> 未进前 ${CAP} 名 · ${showLink()}`; bind(); return; }
+      const rankGuess = j.list.filter(e => j.dir === 'desc' ? e.score >= score : e.score <= score).length + 1;
+      box.innerHTML = `🎉 <b>${esc(fmt(score, { meta }))}</b> 能排到第 <b>${rankGuess}</b> 名！留个名字上榜：<div class="row"><input maxlength="12" placeholder="你的名字（最多 12 字）" value="${esc(getName())}"><button>留名上榜</button></div>`;
+      const inp = box.querySelector('input'), btn = box.querySelector('button');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+      btn.onclick = async () => {
+        const name = inp.value.trim(); if (!name) { inp.focus(); return; } setName(name); btn.disabled = true; btn.textContent = '提交中…';
+        try { const r = await submit(game, board, name, score, meta); box.innerHTML = `<span class="ok">✔ 上榜成功，第 ${r.rank} 名！</span> ${showLink()}`; bind(); }
+        catch (e) { btn.disabled = false; btn.textContent = '重试'; const m = /too many/.test(e.message) ? '提交太频繁，稍后再试' : /range/.test(e.message) ? '成绩不在合理范围' : '提交失败'; let t = box.querySelector('.lb-err'); if (!t) { t = document.createElement('div'); t.className = 'lb-err'; box.appendChild(t); } t.textContent = m; }
+      };
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    }).catch(() => { box.innerHTML = '🏆 英雄榜暂时打不开'; });
+  }
+  return { enabled, show, offer, getName, fetchList, submit, CAP };
+})();
+/* @lb-end */
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const rint = n => Math.floor(rnd() * n);
+const KEY = 'gh:mines:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const DIFFS = [[9, 9, 10], [16, 16, 40], [30, 16, 99]];
+let diff = store.get('diff', 0), W = 9, H = 9, M = 10, cell = 32;
+let mine, open, flag, num, started, over, won, flags, opened, t0 = 0, elapsed = 0, timer = 0, flagMode = false, pressing = null, hover = -1;
+const NUMC = ['', '#2563eb', '#16a34a', '#dc2626', '#7c3aed', '#b45309', '#0891b2', '#1e293b', '#64748b'];
+const idx = (x, y) => y * W + x;
+const nb = i => { const x = i % W, y = (i / W) | 0, r = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const nx = x + dx, ny = y + dy; if (nx >= 0 && nx < W && ny >= 0 && ny < H) r.push(idx(nx, ny)); } return r; };
+
+function newGame() {
+  [W, H, M] = DIFFS[diff]; const n = W * H;
+  mine = new Uint8Array(n); open = new Uint8Array(n); flag = new Uint8Array(n); num = new Uint8Array(n);
+  started = false; over = false; won = false; flags = 0; opened = 0; elapsed = 0; clearInterval(timer); timer = 0; pressing = null;
+  $('#face').textContent = '🙂'; hideOv(); layout(); hud();
+}
+function plant(safe) {
+  const avoid = new Set([safe, ...nb(safe)]); let left = M;
+  while (left > 0) { const i = rint(W * H); if (mine[i] || avoid.has(i)) continue; mine[i] = 1; left--; }
+  for (let i = 0; i < W * H; i++) num[i] = nb(i).reduce((s, j) => s + mine[j], 0);
+  started = true; t0 = performance.now(); timer = setInterval(() => { elapsed = Math.floor((performance.now() - t0) / 1000); hud(); }, 250);
+}
+function reveal(i) {
+  if (open[i] || flag[i]) return;
+  if (!started) plant(i);
+  if (mine[i]) return boom(i);
+  const stack = [i];
+  while (stack.length) { const j = stack.pop(); if (open[j] || flag[j]) continue; open[j] = 1; opened++; if (num[j] === 0) for (const k of nb(j)) if (!open[k]) stack.push(k); }
+  if (opened === W * H - M) win();
+}
+function chord(i) { if (!open[i] || !num[i]) return; const ns = nb(i); const f = ns.reduce((s, j) => s + flag[j], 0); if (f !== num[i]) return; for (const j of ns) if (!open[j] && !flag[j]) { reveal(j); if (over) return; } }
+function toggleFlag(i) { if (open[i] || over) return; if (!started) return SFX.tone(200, 0.05); flag[i] ^= 1; flags += flag[i] ? 1 : -1; SFX.tone(flag[i] ? 700 : 500, 0.05, 'triangle', 0.1); hud(); draw(); }
+function boom(i) { over = true; open[i] = 1; num[i] = 0; mine[i] = 2; clearInterval(timer); $('#face').textContent = '😵'; SFX.tone(160, 0.5, 'sawtooth', 0.15, 40); draw(); setTimeout(() => showOv('💥 踩雷了', `用时 ${elapsed} 秒 · 已翻开 ${opened} / ${W * H - M}`, [['再来一局', newGame]]), 500); }
+function win() { over = true; won = true; clearInterval(timer); elapsed = Math.round((performance.now() - t0) / 10) / 100; for (let i = 0; i < W * H; i++) if (mine[i] && !flag[i]) { flag[i] = 1; flags++; } $('#face').textContent = '😎'; SFX.tone(660, 0.12, 'square', 0.1, 990); setTimeout(() => SFX.tone(990, 0.25, 'square', 0.1, 1320), 120);
+  const k = 'best' + diff, b = store.get(k, null); const isBest = b == null || elapsed < b; if (isBest) store.set(k, elapsed); hud(); draw();
+  const d = diff, t = elapsed; setTimeout(() => { showOv('🎉 排雷成功', `用时 ${t} 秒${isBest ? ' · 新纪录！' : b != null ? ' · 最佳 ' + b + ' 秒' : ''}`, [['再来一局', newGame]]); LB.offer($('#ovLB'), { game: 'minesweeper', board: 'time' + d, score: t, fmt: lbFmt, boards: LBB }); }, 400); }
+function hud() { const m = M - flags; $('#mines').textContent = (m < 0 ? '-' : '') + String(Math.abs(m)).padStart(3, '0'); $('#time').textContent = String(Math.min(999, Math.floor(elapsed))).padStart(3, '0'); const b = store.get('best' + diff, null); $('#time').title = b != null ? '最佳 ' + b + ' 秒' : ''; }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').textContent = p; const b = $('#ovB'); b.innerHTML = ''; $('#ovLB').innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+
+function layout() {
+  const st = $('.stage'); const aw = st.clientWidth - 20, ah = st.clientHeight - 14;
+  cell = Math.max(18, Math.min(44, Math.floor(Math.min(aw / W, ah / H))));
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.style.width = W * cell + 'px'; cv.style.height = H * cell + 'px'; cv.width = Math.round(W * cell * dpr); cv.height = Math.round(H * cell * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw();
+}
+function draw() {
+  ctx.clearRect(0, 0, W * cell, H * cell);
+  for (let i = 0; i < W * H; i++) {
+    const x = (i % W) * cell, y = ((i / W) | 0) * cell, r = Math.max(2, cell * 0.12);
+    if (open[i]) {
+      ctx.fillStyle = mine[i] === 2 ? '#fca5a5' : ((i % W + ((i / W) | 0)) & 1 ? '#e2e8f0' : '#e8edf3'); ctx.fillRect(x, y, cell, cell);
+      if (mine[i]) drawMine(x, y);
+      else if (num[i]) { ctx.fillStyle = NUMC[num[i]]; ctx.font = `900 ${cell * 0.58}px "Segoe UI",Roboto,Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(num[i], x + cell / 2, y + cell / 2 + cell * 0.04); }
+    } else {
+      const pressed = pressing != null && (pressing === i || (open[pressing] && nb(pressing).includes(i))) && !flag[i];
+      ctx.fillStyle = pressed ? '#c7d2e0' : hover === i && !over ? '#b6c4d8' : '#94a8c4'; rr(x + 1, y + 1, cell - 2, cell - 2, r); ctx.fill();
+      if (!pressed) { ctx.fillStyle = 'rgba(255,255,255,.35)'; rr(x + 1, y + 1, cell - 2, cell * 0.45, r); ctx.fill(); }
+      if (flag[i]) { if (over && !won && !mine[i]) { ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + cell * 0.25, y + cell * 0.25); ctx.lineTo(x + cell * 0.75, y + cell * 0.75); ctx.moveTo(x + cell * 0.75, y + cell * 0.25); ctx.lineTo(x + cell * 0.25, y + cell * 0.75); ctx.stroke(); } drawFlag(x, y); }
+      else if (over && !won && mine[i]) drawMine(x, y);
+    }
+  }
+}
+function drawMine(x, y) { const c = cell / 2; ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(x + c, y + c, cell * 0.26, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = Math.max(2, cell * 0.08); ctx.lineCap = 'round'; for (let a = 0; a < 8; a++) { const t = a * Math.PI / 4; ctx.beginPath(); ctx.moveTo(x + c + Math.cos(t) * cell * 0.2, y + c + Math.sin(t) * cell * 0.2); ctx.lineTo(x + c + Math.cos(t) * cell * 0.4, y + c + Math.sin(t) * cell * 0.4); ctx.stroke(); } ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + c - cell * 0.09, y + c - cell * 0.09, cell * 0.07, 0, Math.PI * 2); ctx.fill(); }
+function drawFlag(x, y) { ctx.strokeStyle = '#1e293b'; ctx.lineWidth = Math.max(2, cell * 0.08); ctx.beginPath(); ctx.moveTo(x + cell * 0.42, y + cell * 0.22); ctx.lineTo(x + cell * 0.42, y + cell * 0.8); ctx.stroke(); ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.moveTo(x + cell * 0.42, y + cell * 0.2); ctx.lineTo(x + cell * 0.78, y + cell * 0.36); ctx.lineTo(x + cell * 0.42, y + cell * 0.52); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#1e293b'; ctx.fillRect(x + cell * 0.28, y + cell * 0.76, cell * 0.3, cell * 0.08); }
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+// 输入：左键翻开 / 右键旗 / 长按旗 / 数字连锁
+const cellAt = e => { const r = cv.getBoundingClientRect(); const x = Math.floor((e.clientX - r.left) / cell), y = Math.floor((e.clientY - r.top) / cell); return x >= 0 && x < W && y >= 0 && y < H ? idx(x, y) : -1; };
+let lpTimer = 0, lpFired = false, downI = -1;
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => {
+  SFX.unlock(); if (over) return; const i = cellAt(e); if (i < 0) return; downI = i; lpFired = false;
+  if (e.button === 2) { toggleFlag(i); return; }
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lpTimer = setTimeout(() => { lpFired = true; if (!open[i]) toggleFlag(i); else chord(i), hud(), draw(); if (navigator.vibrate) navigator.vibrate(30); pressing = null; draw(); }, 380); }
+  if (!flag[i]) { pressing = i; $('#face').textContent = '😮'; draw(); }
+});
+cv.addEventListener('pointermove', e => { const i = cellAt(e); if (i !== hover) { hover = i; if (!over) draw(); } if (pressing != null && i !== downI) { clearTimeout(lpTimer); pressing = null; draw(); } });
+cv.addEventListener('pointerleave', () => { hover = -1; if (!over) draw(); });
+window.addEventListener('pointerup', e => {
+  clearTimeout(lpTimer); if (over) { pressing = null; return; } if (!lpFired && pressing != null && downI >= 0 && e.button !== 2) {
+    const i = cellAt(e); if (i === downI) { if (open[i]) chord(i); else if (flagMode) toggleFlag(i); else { reveal(i); if (!over) SFX.tone(420, 0.04, 'sine', 0.08); } }
+  }
+  pressing = null; if (!over) $('#face').textContent = '🙂'; hud(); draw();
+});
+$('#face').onclick = newGame;
+$('#diff').value = diff; $('#diff').onchange = e => { diff = +e.target.value; store.set('diff', diff); newGame(); };
+const flagBtn = $('#btnFlag'); flagBtn.onclick = () => { flagMode = !flagMode; flagBtn.classList.toggle('on', flagMode); flagBtn.textContent = flagMode ? '🚩 插旗中' : '🚩 插旗'; };
+const LBB = [{ key: 'time0', label: '初级' }, { key: 'time1', label: '中级' }, { key: 'time2', label: '高级' }], lbFmt = v => v + ' 秒';
+$('#btnLB').onclick = () => LB.show('minesweeper', LBB, lbFmt);
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') newGame(); else if (e.key === 'f' || e.key === 'F') flagBtn.click(); });
+window.addEventListener('resize', layout);
+
+newGame();
+if (STILL) {
+  diff = 1; $('#diff').value = diff; newGame(); reveal(idx(3, 3)); for (const [x, y] of [[12, 11], [7, 7], [13, 3], [2, 12]]) if (!mine[idx(x, y)]) reveal(idx(x, y));
+  let n = 0; for (let i = 0; i < W * H && n < 14; i++) if (mine[i] && !open[i] && nb(i).some(j => open[j])) { flag[i] = 1; flags++; n++; }
+  elapsed = 47; clearInterval(timer); hud(); document.title = 'STILL-READY';
+  let k = 0; (function redraw() { layout(); if (++k < 10) requestAnimationFrame(redraw); })();
+} else requestAnimationFrame(layout);
+</script>
+</body>
+</html>

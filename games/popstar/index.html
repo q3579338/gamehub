@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>消灭星星</title>
+<style>
+:root{--bg:#141a33;--ink:#eef1ff;--ink2:#9aa3c7;--acc:#ffb703}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column;
+  background-image:radial-gradient(700px 400px at 20% -10%,rgba(255,183,3,.14),transparent 60%),radial-gradient(600px 300px at 90% 0%,rgba(131,56,236,.18),transparent 60%)}
+.top{display:flex;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 6px;flex-wrap:wrap}
+.ttl{font-size:22px;font-weight:900;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin-top:5px}
+.stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;min-width:66px;text-align:center;line-height:1.15}
+.stat span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink2)}
+.stat b{display:block;font-size:19px}
+.stat b.ok{color:#7CFC9A}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:8px 12px;background:var(--acc);color:#3a2a00;cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:rgba(255,255,255,.1);color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:4px 10px 10px;min-height:0}
+canvas{display:block;touch-action:none;border-radius:12px}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(20,26,51,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#1f2748;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:24px 28px;box-shadow:0 20px 60px -20px rgba(0,0,0,.8);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:26px;font-weight:900}
+.panel p{margin:0 0 16px;color:var(--ink2);font-size:14px;line-height:1.6}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">⭐ 消灭星星<small>点相邻同色的星星，一次消得越多分越高</small></div>
+  <div class="stat"><span>选中</span><b id="pick">—</b></div>
+  <div class="stat"><span>分数</span><b id="score">0</b></div>
+  <div class="stat"><span>目标</span><b id="target">1000</b></div>
+  <div class="stat"><span>关卡</span><b id="lv">1</b></div>
+  <div class="stat"><span>最高</span><b id="best">0</b></div>
+  <button class="ghost" id="btnNew" title="重开 (R)">重开</button>
+  <button class="ghost" id="btnLB" title="英雄榜">🏆</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov" hidden><div class="panel"><h2 id="ovT"></h2><p id="ovP"></p><div id="ovLB"></div><div class="row" id="ovB"></div></div></div>
+</div>
+<div class="tip">点一下选中一组（≥2 个相邻同色），再点一下消除 · 分数 = n² × 5 · 剩余星星少于 10 个有额外奖励</div>
+<script>
+'use strict';
+/* @lb-start */
+/* 英雄榜客户端（由 tools/inject.mjs 注入到每个自制游戏，源文件 games/_shared/leaderboard.js，改这里再 node tools/inject.mjs） */
+const LB = (() => {
+  const API = '/api/scores', CAP = 20, NAME_KEY = 'gh:name';
+  const enabled = /^https?:$/.test(location.protocol);
+  const getName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+  const setName = n => { try { localStorage.setItem(NAME_KEY, n); } catch (e) {} };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CSS = `.lb-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.lb-panel{width:min(92vw,420px);max-height:86vh;overflow:auto;background:#161b2c;color:#e8ecf5;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 70px -20px rgba(0,0,0,.8);position:relative}
+.lb-panel h3{margin:0 0 4px;font-size:18px;font-weight:900;padding-right:36px}.lb-panel h3 small{color:#8b93a7;font-weight:500;font-size:12px;margin-left:8px}
+.lb-x{position:absolute;right:10px;top:10px;width:30px;height:30px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8ecf5;font-size:16px;cursor:pointer}
+.lb-tabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}.lb-tabs button{font:inherit;font-size:12.5px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab3c8;border-radius:999px;padding:5px 11px;cursor:pointer}.lb-tabs button.on{background:#ffd166;color:#1a1200;border-color:#ffd166}
+.lb-list{list-style:none;margin:0;padding:0}.lb-list li{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:14px}.lb-list li:nth-child(1) .lb-rk{background:#ffd166;color:#1a1200}.lb-list li:nth-child(2) .lb-rk{background:#cfd6e4;color:#1a1200}.lb-list li:nth-child(3) .lb-rk{background:#d9a066;color:#1a1200}
+.lb-rk{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex:none}.lb-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.lb-sc{font-weight:800;white-space:nowrap}.lb-dt{color:#5f677a;font-size:11.5px;white-space:nowrap}
+.lb-empty,.lb-note{color:#8b93a7;font-size:13px;text-align:center;padding:14px 0}.lb-list li.me{background:rgba(255,209,102,.12);border-radius:8px}
+.lb-offer{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);text-align:left;font-size:13.5px;line-height:1.5;color:inherit}
+.lb-offer b{color:#d98f00}.lb-offer .row{display:flex;gap:8px;margin-top:8px}.lb-offer input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.4);background:rgba(255,255,255,.9);color:#111}
+.lb-offer button{font:inherit;font-weight:800;font-size:13.5px;border:0;border-radius:8px;padding:8px 12px;background:#ffb703;color:#1a1200;cursor:pointer;white-space:nowrap}.lb-offer button[disabled]{opacity:.6;cursor:default}.lb-offer a{color:#d98f00;font-weight:700;cursor:pointer;text-decoration:underline}
+.lb-offer .ok{color:#2a9d4a;font-weight:800}`;
+  function ensureCss() { if (!document.getElementById('lb-css')) { const s = document.createElement('style'); s.id = 'lb-css'; s.textContent = CSS; document.head.appendChild(s); } }
+  const fmtDate = at => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  async function fetchList(game, board, limit = CAP) { const r = await fetch(`${API}?game=${encodeURIComponent(game)}&board=${encodeURIComponent(board)}&limit=${limit}`, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status); return r.json(); }
+  async function submit(game, board, name, score, meta) { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game, board, name, score, meta }) }); const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || ('http ' + r.status)); return j; }
+  const qualifies = (list, dir, score) => list.length < CAP || (dir === 'desc' ? score > list[list.length - 1].score : score < list[list.length - 1].score);
+  function renderList(ul, list, fmt, meId) {
+    ul.innerHTML = list.length ? list.map(e => `<li${meId && e.id === meId ? ' class="me"' : ''}><span class="lb-rk">${e.rank}</span><span class="lb-nm">${esc(e.name)}</span><span class="lb-sc">${esc(fmt(e.score, e))}</span><span class="lb-dt">${fmtDate(e.at)}</span></li>`).join('') : '<li class="lb-empty">还没有人上榜，来当第一个！</li>';
+  }
+  // 弹出榜单：boards = [{key,label}]，fmt(score, entry) → 显示文本
+  async function show(game, boards, fmt, title = '🏆 英雄榜') {
+    if (!enabled) return alert('英雄榜需要在线打开（game.satloot.com）');
+    ensureCss(); if (typeof boards === 'string') boards = [{ key: boards, label: '' }];
+    const ov = document.createElement('div'); ov.className = 'lb-ov';
+    ov.innerHTML = `<div class="lb-panel"><button class="lb-x" title="关闭">✕</button><h3>${esc(title)}<small>前 ${CAP} 名</small></h3>${boards.length > 1 ? `<div class="lb-tabs">${boards.map((b, i) => `<button data-k="${esc(b.key)}"${i ? '' : ' class="on"'}>${esc(b.label)}</button>`).join('')}</div>` : ''}<ul class="lb-list"><li class="lb-empty">加载中…</li></ul></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove(); ov.querySelector('.lb-x').onclick = close; ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); window.removeEventListener('keydown', onKey, true); } }; window.addEventListener('keydown', onKey, true);
+    const ul = ov.querySelector('.lb-list');
+    const loadBoard = async k => { ul.innerHTML = '<li class="lb-empty">加载中…</li>'; try { const j = await fetchList(game, k); renderList(ul, j.list, fmt); } catch (e) { ul.innerHTML = '<li class="lb-empty">榜单暂时打不开</li>'; } };
+    ov.querySelectorAll('.lb-tabs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.lb-tabs button').forEach(x => x.classList.toggle('on', x === b)); loadBoard(b.dataset.k); });
+    loadBoard(boards[0].key);
+  }
+  // 在结算面板里给出「留名上榜」：host 为容器元素
+  function offer(host, { game, board, score, meta, fmt, boards, title }) {
+    if (!host) return; host.innerHTML = '';
+    if (!enabled || !(score > 0)) return;
+    ensureCss(); const box = document.createElement('div'); box.className = 'lb-offer'; box.innerHTML = '🏆 英雄榜 · 查询中…'; host.appendChild(box);
+    const showLink = () => `<a class="lb-view">查看榜单</a>`;
+    const bind = () => { const a = box.querySelector('.lb-view'); if (a) a.onclick = () => show(game, boards || board, fmt, title); };
+    fetchList(game, board).then(j => {
+      if (!qualifies(j.list, j.dir, score)) { box.innerHTML = `本局 <b>${esc(fmt(score, { meta }))}</b> 未进前 ${CAP} 名 · ${showLink()}`; bind(); return; }
+      const rankGuess = j.list.filter(e => j.dir === 'desc' ? e.score >= score : e.score <= score).length + 1;
+      box.innerHTML = `🎉 <b>${esc(fmt(score, { meta }))}</b> 能排到第 <b>${rankGuess}</b> 名！留个名字上榜：<div class="row"><input maxlength="12" placeholder="你的名字（最多 12 字）" value="${esc(getName())}"><button>留名上榜</button></div>`;
+      const inp = box.querySelector('input'), btn = box.querySelector('button');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+      btn.onclick = async () => {
+        const name = inp.value.trim(); if (!name) { inp.focus(); return; } setName(name); btn.disabled = true; btn.textContent = '提交中…';
+        try { const r = await submit(game, board, name, score, meta); box.innerHTML = `<span class="ok">✔ 上榜成功，第 ${r.rank} 名！</span> ${showLink()}`; bind(); }
+        catch (e) { btn.disabled = false; btn.textContent = '重试'; const m = /too many/.test(e.message) ? '提交太频繁，稍后再试' : /range/.test(e.message) ? '成绩不在合理范围' : '提交失败'; let t = box.querySelector('.lb-err'); if (!t) { t = document.createElement('div'); t.className = 'lb-err'; box.appendChild(t); } t.textContent = m; }
+      };
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    }).catch(() => { box.innerHTML = '🏆 英雄榜暂时打不开'; });
+  }
+  return { enabled, show, offer, getName, fetchList, submit, CAP };
+})();
+/* @lb-end */
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const KEY = 'gh:popstar:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const N = 10, COLORS = ['#ff4d6d', '#ffb703', '#3ddc84', '#4cc9f0', '#b78cff'];
+let grid = [], y = [], score = 0, best = store.get('best', 0), level = 1, sel = [], parts = [], floats = [], state = 'play', cell = 40, side = 400, looping = false, lastT = 0;
+const target = L => 1000 + (L - 1) * 2000 + Math.max(0, L - 3) * 1000;
+const at = (c, r) => grid[c][r];
+
+function newBoard() { grid = Array.from({ length: N }, () => Array.from({ length: N }, () => Math.floor(rnd() * COLORS.length))); y = Array.from({ length: N }, () => Array.from({ length: N }, (_, r) => r)); sel = []; }
+function newGame() { score = 0; level = 1; newBoard(); state = 'play'; parts = []; floats = []; hideOv(); hud(); draw(); }
+function hud() { $('#score').textContent = score; $('#target').textContent = target(level); $('#lv').textContent = level; $('#best').textContent = Math.max(best, score); $('#score').classList.toggle('ok', score >= target(level)); }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').innerHTML = p; const b = $('#ovB'); b.innerHTML = ''; $('#ovLB').innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+
+function group(c, r) { const col = at(c, r); if (col < 0) return []; const seen = new Set(), st = [[c, r]], out = []; seen.add(c * N + r); while (st.length) { const [x, yy] = st.pop(); out.push([x, yy]); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = yy + dy; if (nx < 0 || nx >= N || ny < 0 || ny >= N || seen.has(nx * N + ny) || at(nx, ny) !== col) continue; seen.add(nx * N + ny); st.push([nx, ny]); } } return out; }
+function anyMove() { for (let c = 0; c < N; c++) for (let r = 0; r < N; r++) { if (at(c, r) < 0) continue; if (c + 1 < N && at(c + 1, r) === at(c, r)) return true; if (r + 1 < N && at(c, r + 1) === at(c, r)) return true; } return false; }
+function remaining() { let n = 0; for (const col of grid) for (const v of col) if (v >= 0) n++; return n; }
+function pop(g) {
+  const n = g.length, pts = n * n * 5; score += pts; if (score > best) { best = score; store.set('best', best); }
+  const col = COLORS[at(g[0][0], g[0][1])]; let cx = 0, cy = 0;
+  for (const [c, r] of g) { cx += c; cy += r; for (let i = 0; i < 6; i++) { const a = rnd() * Math.PI * 2, s = 60 + rnd() * 160; parts.push({ x: (c + .5) * cell, y: (r + .5) * cell, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: 0.7, col }); } grid[c][r] = -1; }
+  floats.push({ x: (cx / n + .5) * cell, y: (cy / n + .5) * cell, t: '+' + pts, life: 1 });
+  SFX.tone(400 + Math.min(n, 20) * 40, 0.12, 'square', 0.1, 700 + Math.min(n, 20) * 60);
+  // 重力：列内下落
+  for (let c = 0; c < N; c++) { let w = N - 1; for (let r = N - 1; r >= 0; r--) { if (grid[c][r] >= 0) { if (w !== r) { grid[c][w] = grid[c][r]; y[c][w] = y[c][r]; grid[c][r] = -1; } w--; } } }
+  // 空列左移
+  let wc = 0; for (let c = 0; c < N; c++) { if (grid[c].some(v => v >= 0)) { if (wc !== c) { grid[wc] = grid[c]; y[wc] = y[c]; grid[c] = Array(N).fill(-1); y[c] = Array.from({ length: N }, (_, r) => r); } wc++; } }
+  sel = []; hud(); loop();
+  if (!anyMove()) setTimeout(endLevel, 500);
+}
+function endLevel() {
+  const left = remaining(); const bonus = left < 10 ? 2000 - left * left * 20 : 0; score += bonus; if (score > best) { best = score; store.set('best', best); } hud();
+  if (score >= target(level)) { state = 'clear'; SFX.tone(660, 0.15, 'square', 0.1, 990); setTimeout(() => SFX.tone(990, 0.3, 'square', 0.1, 1320), 150); showOv(`第 ${level} 关 通过！`, `剩余 ${left} 颗${bonus ? ' · 奖励 +' + bonus : ''}<br>当前 ${score} 分`, [['下一关', () => { level++; newBoard(); state = 'play'; hideOv(); hud(); draw(); }]]); }
+  else { state = 'over'; SFX.tone(220, 0.4, 'sawtooth', 0.12, 60); showOv('差一点…', `第 ${level} 关 · ${score} 分，目标 ${target(level)}${bonus ? '（含剩余奖励 +' + bonus + '）' : ''}<br>最高 ${best} 分`, [['再来一局', newGame]]); LB.offer($('#ovLB'), { game: 'popstar', board: 'score', score, meta: { level }, fmt: lbFmt }); }
+}
+function tap(c, r) {
+  if (state !== 'play' || at(c, r) < 0) return;
+  if (sel.length && sel.some(([x, yy]) => x === c && yy === r)) { if (sel.length >= 2) pop(sel); return; }
+  const g = group(c, r); if (g.length < 2) { sel = []; draw(); SFX.tone(200, 0.04, 'sine', 0.05); return; }
+  sel = g; SFX.tone(500, 0.04, 'triangle', 0.08); draw();
+}
+
+function layout() { const st = $('.stage'); side = Math.max(260, Math.min(600, st.clientWidth - 20, st.clientHeight - 14)); cell = side / N; const dpr = Math.min(window.devicePixelRatio || 1, 3); cv.style.width = cv.style.height = side + 'px'; cv.width = cv.height = Math.round(side * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
+function star(x, yy, r, rot) { ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = rot + i * Math.PI / 5, rr = i % 2 ? r * 0.5 : r; ctx.lineTo(x + Math.cos(a) * rr, yy + Math.sin(a) * rr); } ctx.closePath(); }
+function draw() {
+  ctx.clearRect(0, 0, side, side); ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.fillRect(0, 0, side, side);
+  const selSet = new Set(sel.map(([c, r]) => c * N + r)); const pts = sel.length ? sel.length * sel.length * 5 : 0;
+  for (let c = 0; c < N; c++) for (let r = 0; r < N; r++) {
+    const v = grid[c][r]; if (v < 0) continue; const isSel = selSet.has(c * N + r);
+    const x = (c + .5) * cell, yy = (y[c][r] + .5) * cell, rad = cell * (isSel ? 0.46 : 0.38);
+    ctx.save(); if (isSel) { ctx.shadowColor = COLORS[v]; ctx.shadowBlur = 16; }
+    const g = ctx.createRadialGradient(x - rad * 0.3, yy - rad * 0.3, rad * 0.1, x, yy, rad); g.addColorStop(0, '#fff'); g.addColorStop(0.25, COLORS[v]); g.addColorStop(1, COLORS[v]);
+    ctx.fillStyle = g; star(x, yy, rad, -Math.PI / 2 + (isSel ? Math.sin(performance.now() / 150) * 0.2 : 0)); ctx.fill(); ctx.restore();
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1.5; star(x, yy, rad, -Math.PI / 2 + (isSel ? Math.sin(performance.now() / 150) * 0.2 : 0)); ctx.stroke();
+  }
+  $('#pick').textContent = pts ? `${sel.length} 连 +${pts}` : '—';
+  for (const p of parts) { ctx.globalAlpha = Math.max(0, p.life / 0.7); ctx.fillStyle = p.col; star(p.x, p.y, cell * 0.12, p.life * 6); ctx.fill(); } ctx.globalAlpha = 1;
+  for (const f of floats) { ctx.globalAlpha = Math.max(0, f.life); ctx.fillStyle = '#fff'; ctx.font = `900 ${cell * 0.5}px sans-serif`; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.strokeText(f.t, f.x, f.y - (1 - f.life) * 40); ctx.fillText(f.t, f.x, f.y - (1 - f.life) * 40); } ctx.globalAlpha = 1;
+}
+function loop() { if (looping || STILL) return; looping = true; lastT = performance.now(); requestAnimationFrame(tick); }
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; let anim = false;
+  for (let c = 0; c < N; c++) for (let r = 0; r < N; r++) { if (grid[c][r] < 0) { y[c][r] = r; continue; } if (y[c][r] !== r) { y[c][r] = Math.min(r, y[c][r] + dt * 14 + (r - y[c][r]) * dt * 8); if (r - y[c][r] < 0.01) y[c][r] = r; else anim = true; } }
+  for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 400 * dt; p.life -= dt; } parts = parts.filter(p => p.life > 0); if (parts.length) anim = true;
+  for (const f of floats) f.life -= dt * 1.2; floats = floats.filter(f => f.life > 0); if (floats.length) anim = true;
+  if (sel.length) anim = true;
+  draw(); if (anim) requestAnimationFrame(tick); else looping = false;
+}
+cv.addEventListener('pointerdown', e => { SFX.unlock(); e.preventDefault(); const rc = cv.getBoundingClientRect(); const c = Math.floor((e.clientX - rc.left) / cell), r = Math.floor((e.clientY - rc.top) / cell); if (c < 0 || c >= N || r < 0 || r >= N) return; tap(c, r); loop(); });
+$('#btnNew').onclick = newGame;
+const LBB = 'score', lbFmt = (v, e) => v + ' 分' + (e && e.meta && e.meta.level ? ' · 第 ' + e.meta.level + ' 关' : '');
+$('#btnLB').onclick = () => LB.show('popstar', LBB, lbFmt);
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('keydown', e => { if (e.key === 'r' || e.key === 'R') newGame(); });
+window.addEventListener('resize', layout);
+
+newGame();
+if (STILL) {
+  level = 2; score = 2860; for (let k = 0; k < 6; k++) { for (let c = 0; c < N; c++) for (let r = 0; r < N; r++) { if (grid[c][r] >= 0) { const g = group(c, r); if (g.length >= 4) { for (const [x, yy] of g) grid[x][yy] = -1; k = 99; c = N; break; } } } }
+  for (let c = 0; c < N; c++) { let w = N - 1; for (let r = N - 1; r >= 0; r--) if (grid[c][r] >= 0) { grid[c][w--] = grid[c][r]; } for (let r = w; r >= 0; r--) grid[c][r] = -1; }
+  y = Array.from({ length: N }, () => Array.from({ length: N }, (_, r) => r));
+  outer: for (let c = 0; c < N; c++) for (let r = 0; r < N; r++) { if (grid[c][r] >= 0) { const g = group(c, r); if (g.length >= 3) { sel = g; break outer; } } }
+  hud(); document.title = 'STILL-READY'; let n = 0; (function redraw() { layout(); if (++n < 10) requestAnimationFrame(redraw); })();
+} else requestAnimationFrame(layout);
+</script>
+</body>
+</html>

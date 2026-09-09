@@ -10,37 +10,78 @@
       {
         "name": "satloot.com",
         "url": "https://satloot.com",
-        "desc": "项目总览 · 全部站点与开源仓库"
+        "desc": "项目总览 · 全部站点与开源仓库",
+        "descEn": "Project index · all sites and open-source repos"
       },
       {
         "name": "sim.satloot.com",
         "url": "https://sim.satloot.com",
-        "desc": "合约模拟器 · 真实行情 + 模拟资金"
+        "desc": "合约模拟器 · 真实行情 + 模拟资金",
+        "descEn": "Futures simulator · real market data, paper money"
       },
       {
         "name": "bnbbang.com",
         "url": "https://bnbbang.com",
-        "desc": "镜像宇宙 BNBBANG · 每个 BNB 区块哈希都是一个宇宙"
+        "desc": "镜像宇宙 BNBBANG · 每个 BNB 区块哈希都是一个宇宙",
+        "descEn": "BNBBANG mirror universe · every BNB block hash is a universe"
+      },
+      {
+        "name": "bang.satloot.com",
+        "url": "https://bang.satloot.com",
+        "desc": "比特宇宙 BTCBANG · 每个比特币区块都是一个宇宙",
+        "descEn": "BTCBANG · every Bitcoin block is a universe"
       },
       {
         "name": "earn.satloot.com",
         "url": "https://earn.satloot.com",
-        "desc": "riskdesk · 加密市场扫描与交易风控面板"
+        "desc": "riskdesk · 加密市场扫描与交易风控面板",
+        "descEn": "riskdesk · crypto market scanner and trading risk panel"
       },
       {
         "name": "airdrop.satloot.com",
         "url": "https://airdrop.satloot.com",
-        "desc": "空投雷达 · 进行中的空投项目一览"
+        "desc": "空投雷达 · 进行中的空投项目一览",
+        "descEn": "Airdrop radar · ongoing airdrops at a glance"
       },
       {
         "name": "tool.satloot.com",
         "url": "https://tool.satloot.com",
-        "desc": "satloot 工具站 · 客户端下载"
+        "desc": "satloot 工具站 · 客户端下载",
+        "descEn": "satloot tools · client downloads"
+      },
+      {
+        "name": "trx.satloot.com",
+        "url": "https://trx.satloot.com",
+        "desc": "TRX 质押收益计算器 · 搜狐收购价 + 投票年化",
+        "descEn": "TRX staking yield · SOHU buy-back price + vote APR"
       },
       {
         "name": "faucet.satloot.com",
         "url": "https://faucet.satloot.com",
-        "desc": "比特币测试网水龙头"
+        "desc": "比特币测试网水龙头",
+        "descEn": "Bitcoin testnet faucet"
+      }
+    ],
+    "categories": [
+      {
+        "id": "3d",
+        "name": "3D 冒险",
+        "nameEn": "3D Adventure"
+      },
+      {
+        "id": "action",
+        "name": "动作街机",
+        "nameEn": "Arcade"
+      },
+      {
+        "id": "match",
+        "name": "消除方块",
+        "nameEn": "Blocks & Match"
+      },
+      {
+        "id": "puzzle",
+        "name": "益智棋盘",
+        "nameEn": "Puzzle & Board"
       }
     ]
   },
@@ -58,12 +99,19 @@
         "扭蛋收集",
         "键盘+触屏"
       ],
+      "tagsEn": [
+        "Runner",
+        "Gacha",
+        "Keyboard + touch"
+      ],
       "controls": "←→ / A D 移动 · 空格 / W 跳跃 · Esc 暂停 · 触屏：左右半屏移动，右下角跳",
+      "controlsEn": "←→ / A D move · Space / W jump · Esc pause · Touch: tap the left / right half to move, bottom-right corner to jump",
       "repo": "q3579338/tuanzi-food",
       "public": false,
       "dist": "dist/tuanzi3d.html",
       "shot": "lv=2&seed=7&god=1&still=4500",
-      "featured": true
+      "featured": true,
+      "cat": "3d"
     },
     {
       "id": "tuanzi-kart3d",
@@ -78,11 +126,18 @@
         "漂移氮气",
         "键盘+触屏"
       ],
+      "tagsEn": [
+        "Racing",
+        "Drift & nitro",
+        "Keyboard + touch"
+      ],
       "controls": "W 油门 · S 刹车 · A D / ←→ 转向 · Shift 漂移蓄氮 · 空格 放氮气 · E 道具 · Esc 暂停",
+      "controlsEn": "W throttle · S brake · A D / ←→ steer · Shift drift to charge nitro · Space boost · E use item · Esc pause",
       "repo": "q3579338/tuanzi-kart3d",
       "public": false,
       "dist": "dist/tuanzi3d.html",
-      "shot": "track=1&auto=1&seed=7&still=6000"
+      "shot": "track=1&auto=1&seed=7&still=6000",
+      "cat": "3d"
     },
     {
       "id": "tuanzi3d",
@@ -97,11 +152,18 @@
         "换装",
         "键盘+触屏"
       ],
+      "tagsEn": [
+        "Runner",
+        "Outfits",
+        "Keyboard + touch"
+      ],
       "controls": "←→ / A D 移动 · 空格 / W 跳跃（可变跳高）· Esc 暂停 · 触屏：左右半屏移动，右下角跳",
+      "controlsEn": "←→ / A D move · Space / W jump (hold for height) · Esc pause · Touch: tap the left / right half to move, bottom-right corner to jump",
       "repo": "q3579338/tuanzi3d",
       "public": false,
       "dist": "dist/tuanzi3d.html",
-      "shot": "lv=3&seed=7&god=1&still=4500"
+      "shot": "lv=3&seed=7&god=1&still=4500",
+      "cat": "3d"
     },
     {
       "id": "tuanzi-tetris",
@@ -116,11 +178,18 @@
         "SRS",
         "键盘+触屏"
       ],
+      "tagsEn": [
+        "Classic",
+        "SRS",
+        "Keyboard + touch"
+      ],
       "controls": "←→ 移动 · ↓ 软降 · 空格 硬降 · ↑ / X 顺旋 · Z 逆旋 · C / Shift 暂存 · P / Esc 暂停 · 触屏滑动与点击",
+      "controlsEn": "←→ move · ↓ soft drop · Space hard drop · ↑ / X rotate CW · Z rotate CCW · C / Shift hold · P / Esc pause · Touch: swipe and tap",
       "repo": "q3579338/tuanzi-tetris",
       "public": false,
       "dist": "dist/tetris.html",
-      "shot": "lv=1&seed=7&still=3000"
+      "shot": "lv=1&seed=7&still=3000",
+      "cat": "match"
     },
     {
       "id": "fruit-match3",
@@ -135,11 +204,410 @@
         "休闲",
         "鼠标+触屏"
       ],
+      "tagsEn": [
+        "Match-3",
+        "Casual",
+        "Mouse + touch"
+      ],
       "controls": "点击相邻两个水果交换，或按住拖动 · 三个以上连成一线即消除",
+      "controlsEn": "Tap two adjacent fruits to swap, or drag · line up three or more to clear",
       "repo": "q3579338/fruit-match3",
       "public": false,
       "dist": "dist/fruit.html",
-      "shot": "lv=2&seed=7&still=1500"
+      "shot": "lv=2&seed=7&still=1500",
+      "cat": "match"
+    },
+    {
+      "id": "2048",
+      "title": "2048",
+      "titleEn": "2048",
+      "desc": "经典数字合成：滑动把相同数字撞在一起，合出 2048。带滑动动画、10 步撤销、自动续档，合出 2048 后可继续冲更大的数。",
+      "descEn": "Classic sliding merge puzzle with smooth animations, 10-step undo and auto-resume.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "益智",
+        "数字",
+        "键盘+触屏"
+      ],
+      "tagsEn": [
+        "Puzzle",
+        "Numbers",
+        "Keyboard + touch"
+      ],
+      "controls": "← ↑ → ↓ / W A S D 滑动 · 触屏划动 · Z 撤销 · R 新局",
+      "controlsEn": "← ↑ → ↓ / W A S D slide · swipe on touch · Z undo · R new game",
+      "local": "games/2048/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "snake",
+      "title": "贪吃蛇",
+      "titleEn": "Snake",
+      "desc": "吃果子变长、别撞墙别咬自己。20×20 棋盘，每 5 个果子提速一档，限时金果值 5 倍分，格间平滑插值移动。",
+      "descEn": "Classic snake on a 20×20 board: speed steps every 5 fruits, timed golden fruit worth 5×, smooth interpolated motion.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "经典",
+        "街机",
+        "键盘+触屏"
+      ],
+      "tagsEn": [
+        "Classic",
+        "Arcade",
+        "Keyboard + touch"
+      ],
+      "controls": "方向键 / W A S D 转向 · 触屏划动 · Esc / P 暂停 · R 重开",
+      "controlsEn": "Arrow keys / W A S D turn · swipe on touch · Esc / P pause · R restart",
+      "local": "games/snake/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "action",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "minesweeper",
+      "title": "扫雷",
+      "titleEn": "Minesweeper",
+      "desc": "初级 / 中级 / 高级三档，首击必安全，右键或长按插旗，点数字连锁翻开，手机有插旗模式开关，计时并记录各难度最佳。",
+      "descEn": "Three difficulties, safe first click, flag by right-click or long-press, chording on numbers, a flag-mode toggle for touch, best times per level.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "经典",
+        "益智",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Classic",
+        "Puzzle",
+        "Mouse + touch"
+      ],
+      "controls": "左键翻开 · 右键 / 长按插旗 · 点数字连锁翻开 · F 切换插旗模式 · R 新局",
+      "controlsEn": "Left-click to reveal · right-click / long-press to flag · click a number to chord · F toggle flag mode · R new game",
+      "local": "games/minesweeper/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle",
+      "boards": [
+        {
+          "key": "time0",
+          "label": "初级",
+          "labelEn": "Beginner",
+          "fmt": "sec"
+        },
+        {
+          "key": "time1",
+          "label": "中级",
+          "labelEn": "Intermediate",
+          "fmt": "sec"
+        },
+        {
+          "key": "time2",
+          "label": "高级",
+          "labelEn": "Expert",
+          "fmt": "sec"
+        }
+      ]
+    },
+    {
+      "id": "breakout",
+      "title": "打砖块",
+      "titleEn": "Breakout",
+      "desc": "拖动挡板接球清砖，关卡图案轮换、双血砖块，道具掉落：加宽、分裂三球、减速、加命。击球角度随落点变化，连击加分。",
+      "descEn": "Paddle-and-ball brick breaker: rotating level patterns, 2-hit bricks, drops for wide paddle, multi-ball, slow-mo and extra life.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "街机",
+        "反应",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Arcade",
+        "Reflex",
+        "Mouse + touch"
+      ],
+      "controls": "鼠标 / 触屏拖动挡板 · ← → 移动 · 空格 / 点击发球 · Esc 暂停",
+      "controlsEn": "Mouse / touch drag the paddle · ← → move · Space / tap to launch · Esc pause",
+      "local": "games/breakout/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "action",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "flappy",
+      "title": "笨鸟先飞",
+      "titleEn": "Flappy Bird",
+      "desc": "点一下飞一下，穿过水管缝隙。缝隙随分数收窄、速度渐快，每 10 分昼夜交替，得分有铜银金奖牌。",
+      "descEn": "Tap to flap through the pipes. Gaps narrow and speed rises with score, day/night swaps every 10 points, medals at 10/20/40.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "街机",
+        "反应",
+        "点击+触屏"
+      ],
+      "tagsEn": [
+        "Arcade",
+        "Reflex",
+        "Tap + touch"
+      ],
+      "controls": "点击 / 触屏 / 空格 / ↑ 飞 · R 重开",
+      "controlsEn": "Click / tap / Space / ↑ to flap · R restart",
+      "local": "games/flappy/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "action",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "title": "记忆翻牌",
+      "titleEn": "Memory Match",
+      "desc": "翻开两张一样的图案。15 种程序绘制的图标，4×3 / 4×4 / 6×5 三种规模，翻牌动画、步数与用时，记录各规模最少步数。",
+      "descEn": "Flip two cards to find pairs. 15 procedurally drawn icons, three board sizes, flip animation, moves and timer, best-moves per size.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "益智",
+        "记忆",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Puzzle",
+        "Memory",
+        "Mouse + touch"
+      ],
+      "controls": "点击翻牌 · 一次翻两张 · R 重新洗牌",
+      "controlsEn": "Tap to flip · two cards per turn · R reshuffle",
+      "local": "games/memory/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle",
+      "boards": [
+        {
+          "key": "moves0",
+          "label": "简单 4×3",
+          "labelEn": "Easy 4×3",
+          "fmt": "moves"
+        },
+        {
+          "key": "moves1",
+          "label": "中等 4×4",
+          "labelEn": "Medium 4×4",
+          "fmt": "moves"
+        },
+        {
+          "key": "moves2",
+          "label": "困难 6×5",
+          "labelEn": "Hard 6×5",
+          "fmt": "moves"
+        }
+      ]
+    },
+    {
+      "id": "gomoku",
+      "title": "五子棋",
+      "titleEn": "Gomoku",
+      "desc": "15 路棋盘，人机（可选执黑或执白）或本地双人。电脑按活三活四等棋形攻防评估，落子预览、悔棋、胜线高亮。",
+      "descEn": "15×15 Gomoku vs a pattern-scoring AI (play black or white) or local two-player, with ghost preview, undo and winning-line highlight.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "棋类",
+        "人机对战",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Board game",
+        "vs AI",
+        "Mouse + touch"
+      ],
+      "controls": "鼠标移到交叉点点击落子 · 触屏点一下预览再点确认 · Z 悔棋 · R 重开",
+      "controlsEn": "Click an intersection to place a stone · on touch, tap to preview then tap again to confirm · Z undo · R restart",
+      "local": "games/gomoku/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle"
+    },
+    {
+      "id": "sudoku",
+      "title": "数独",
+      "titleEn": "Sudoku",
+      "desc": "每题都是唯一解：先生成完整解再按唯一性挖空，简单 / 中等 / 困难。笔记模式、错误标红、同数高亮、提示，自动续档，记录各难度最佳用时。",
+      "descEn": "Every puzzle has a unique solution. Three difficulties, pencil notes, error marking, same-digit highlight, hints, auto-resume, best times.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "益智",
+        "数字",
+        "键盘+触屏"
+      ],
+      "tagsEn": [
+        "Puzzle",
+        "Numbers",
+        "Keyboard + touch"
+      ],
+      "controls": "点格子选中 → 按数字填入 · 方向键移动 · N 笔记 · 0 / 退格清除 · H 提示",
+      "controlsEn": "Tap a cell, then press a digit · arrow keys move · N notes · 0 / Backspace clear · H hint",
+      "local": "games/sudoku/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle",
+      "boards": [
+        {
+          "key": "time0",
+          "label": "简单",
+          "labelEn": "Easy",
+          "fmt": "mmss"
+        },
+        {
+          "key": "time1",
+          "label": "中等",
+          "labelEn": "Medium",
+          "fmt": "mmss"
+        },
+        {
+          "key": "time2",
+          "label": "困难",
+          "labelEn": "Hard",
+          "fmt": "mmss"
+        }
+      ]
+    },
+    {
+      "id": "popstar",
+      "title": "消灭星星",
+      "titleEn": "PopStar",
+      "desc": "点相邻同色的星星整组消除，分数 = n²×5，一次消得越多越划算。列内下落、空列左移，每关目标递增，剩星少于 10 颗有额外奖励。",
+      "descEn": "Pop groups of adjacent same-color stars; score = n²×5. Gravity and column collapse, rising level targets, bonus for clearing under 10 stars.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "消除",
+        "益智",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Match",
+        "Puzzle",
+        "Mouse + touch"
+      ],
+      "controls": "点一下选中一组 · 再点一下消除 · R 重开",
+      "controlsEn": "Tap to select a group · tap again to pop it · R restart",
+      "local": "games/popstar/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "match",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "whack",
+      "title": "打地鼠",
+      "titleEn": "Whack-a-Mole",
+      "desc": "45 秒内敲掉尽可能多的地鼠：普通 +10、金鼠 +30、炸弹 −20 并清空连击。出现频率随时间加快，连击越高加分越多。",
+      "descEn": "Whack as many moles as you can in 45 seconds: gold moles +30, bombs −20 and reset the combo. Spawns accelerate over time.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "街机",
+        "反应",
+        "点击+触屏"
+      ],
+      "tagsEn": [
+        "Arcade",
+        "Reflex",
+        "Tap + touch"
+      ],
+      "controls": "点击 / 触屏敲击 · 空格 / R 重开",
+      "controlsEn": "Click / tap to whack · Space / R restart",
+      "local": "games/whack/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "action",
+      "boards": [
+        {
+          "key": "score",
+          "label": "分数",
+          "labelEn": "Score",
+          "fmt": "score"
+        }
+      ]
+    },
+    {
+      "id": "slide15",
+      "title": "数字华容道",
+      "titleEn": "15 Puzzle",
+      "desc": "把打乱的数字滑回顺序。3×3 / 4×4 / 5×5，打乱方式保证一定可解，可一次推动整排，归位的方块颜色变亮，记录各规模最少步数。",
+      "descEn": "Sliding number puzzle in 3×3, 4×4 and 5×5. Shuffles are always solvable, whole rows slide at once, best-moves per size.",
+      "kind": "2D",
+      "engine": "Canvas",
+      "tags": [
+        "益智",
+        "经典",
+        "鼠标+触屏"
+      ],
+      "tagsEn": [
+        "Puzzle",
+        "Classic",
+        "Mouse + touch"
+      ],
+      "controls": "点击与空格同行 / 同列的方块滑动 · 方向键推动 · R 重新打乱",
+      "controlsEn": "Click a tile in the same row / column as the gap to slide · arrow keys push · R reshuffle",
+      "local": "games/slide15/index.html",
+      "shot": "still=1&seed=7",
+      "cat": "puzzle",
+      "boards": [
+        {
+          "key": "moves3",
+          "label": "3×3",
+          "labelEn": "3×3",
+          "fmt": "moves"
+        },
+        {
+          "key": "moves4",
+          "label": "4×4",
+          "labelEn": "4×4",
+          "fmt": "moves"
+        },
+        {
+          "key": "moves5",
+          "label": "5×5",
+          "labelEn": "5×5",
+          "fmt": "moves"
+        }
+      ]
     }
   ]
 }

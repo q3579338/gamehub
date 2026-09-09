@@ -1,0 +1,21 @@
+# systemd 单元：英雄榜 API（deploy.sh 会装到 /etc/systemd/system/gamehub-scores.service）
+[Unit]
+Description=gamehub scores API (game.satloot.com leaderboard)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Environment=PORT=8796
+Environment=DATA_DIR=/var/lib/gamehub
+ExecStart=/usr/bin/node /opt/gamehub/server/scores.mjs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/gamehub
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

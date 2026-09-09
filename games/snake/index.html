@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>贪吃蛇</title>
+<style>
+:root{--bg:#0f172a;--ink:#e2e8f0;--ink2:#94a3b8;--acc:#4ade80;--acc2:#facc15}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column;
+  background-image:radial-gradient(700px 400px at 20% -10%,rgba(74,222,128,.14),transparent 60%),radial-gradient(600px 300px at 90% 0%,rgba(250,204,21,.10),transparent 60%)}
+.top{display:flex;align-items:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 14px 8px;flex-wrap:wrap}
+.ttl{font-size:24px;font-weight:900;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin-top:5px}
+.stat{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 12px;min-width:72px;text-align:center;line-height:1.15}
+.stat span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink2)}
+.stat b{display:block;font-size:20px}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:9px 13px;background:var(--acc);color:#052e16;cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:rgba(255,255,255,.1);color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:4px 10px 10px;min-height:0}
+canvas{display:block;touch-action:none;border-radius:12px;box-shadow:0 20px 60px -20px rgba(0,0,0,.8)}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:26px 30px;box-shadow:0 20px 60px -20px rgba(0,0,0,.8);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:28px;font-weight:900}
+.panel p{margin:0 0 18px;color:var(--ink2);font-size:14px}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">🐍 贪吃蛇<small>吃果子变长，别撞墙别咬自己</small></div>
+  <div class="stat"><span>分数</span><b id="score">0</b></div>
+  <div class="stat"><span>最高</span><b id="best">0</b></div>
+  <div class="stat"><span>速度</span><b id="spd">1</b></div>
+  <button class="ghost" id="btnPause" title="暂停 (Esc / P)">⏸</button>
+  <button class="ghost" id="btnLB" title="英雄榜">🏆</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov">
+    <div class="panel"><h2 id="ovT">贪吃蛇</h2><p id="ovP">方向键 / WASD 转向，触屏划动<br>金色果子限时出现，值 5 倍分</p><div id="ovLB"></div><div class="row" id="ovB"></div></div>
+  </div>
+</div>
+<div class="tip">← ↑ → ↓ / W A S D 转向 · 触屏划动 · Esc / P 暂停 · R 重开</div>
+<script>
+'use strict';
+/* @lb-start */
+/* 英雄榜客户端（由 tools/inject.mjs 注入到每个自制游戏，源文件 games/_shared/leaderboard.js，改这里再 node tools/inject.mjs） */
+const LB = (() => {
+  const API = '/api/scores', CAP = 20, NAME_KEY = 'gh:name';
+  const enabled = /^https?:$/.test(location.protocol);
+  const getName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+  const setName = n => { try { localStorage.setItem(NAME_KEY, n); } catch (e) {} };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CSS = `.lb-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.lb-panel{width:min(92vw,420px);max-height:86vh;overflow:auto;background:#161b2c;color:#e8ecf5;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 70px -20px rgba(0,0,0,.8);position:relative}
+.lb-panel h3{margin:0 0 4px;font-size:18px;font-weight:900;padding-right:36px}.lb-panel h3 small{color:#8b93a7;font-weight:500;font-size:12px;margin-left:8px}
+.lb-x{position:absolute;right:10px;top:10px;width:30px;height:30px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8ecf5;font-size:16px;cursor:pointer}
+.lb-tabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}.lb-tabs button{font:inherit;font-size:12.5px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab3c8;border-radius:999px;padding:5px 11px;cursor:pointer}.lb-tabs button.on{background:#ffd166;color:#1a1200;border-color:#ffd166}
+.lb-list{list-style:none;margin:0;padding:0}.lb-list li{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:14px}.lb-list li:nth-child(1) .lb-rk{background:#ffd166;color:#1a1200}.lb-list li:nth-child(2) .lb-rk{background:#cfd6e4;color:#1a1200}.lb-list li:nth-child(3) .lb-rk{background:#d9a066;color:#1a1200}
+.lb-rk{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex:none}.lb-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.lb-sc{font-weight:800;white-space:nowrap}.lb-dt{color:#5f677a;font-size:11.5px;white-space:nowrap}
+.lb-empty,.lb-note{color:#8b93a7;font-size:13px;text-align:center;padding:14px 0}.lb-list li.me{background:rgba(255,209,102,.12);border-radius:8px}
+.lb-offer{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);text-align:left;font-size:13.5px;line-height:1.5;color:inherit}
+.lb-offer b{color:#d98f00}.lb-offer .row{display:flex;gap:8px;margin-top:8px}.lb-offer input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.4);background:rgba(255,255,255,.9);color:#111}
+.lb-offer button{font:inherit;font-weight:800;font-size:13.5px;border:0;border-radius:8px;padding:8px 12px;background:#ffb703;color:#1a1200;cursor:pointer;white-space:nowrap}.lb-offer button[disabled]{opacity:.6;cursor:default}.lb-offer a{color:#d98f00;font-weight:700;cursor:pointer;text-decoration:underline}
+.lb-offer .ok{color:#2a9d4a;font-weight:800}`;
+  function ensureCss() { if (!document.getElementById('lb-css')) { const s = document.createElement('style'); s.id = 'lb-css'; s.textContent = CSS; document.head.appendChild(s); } }
+  const fmtDate = at => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  async function fetchList(game, board, limit = CAP) { const r = await fetch(`${API}?game=${encodeURIComponent(game)}&board=${encodeURIComponent(board)}&limit=${limit}`, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status); return r.json(); }
+  async function submit(game, board, name, score, meta) { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game, board, name, score, meta }) }); const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || ('http ' + r.status)); return j; }
+  const qualifies = (list, dir, score) => list.length < CAP || (dir === 'desc' ? score > list[list.length - 1].score : score < list[list.length - 1].score);
+  function renderList(ul, list, fmt, meId) {
+    ul.innerHTML = list.length ? list.map(e => `<li${meId && e.id === meId ? ' class="me"' : ''}><span class="lb-rk">${e.rank}</span><span class="lb-nm">${esc(e.name)}</span><span class="lb-sc">${esc(fmt(e.score, e))}</span><span class="lb-dt">${fmtDate(e.at)}</span></li>`).join('') : '<li class="lb-empty">还没有人上榜，来当第一个！</li>';
+  }
+  // 弹出榜单：boards = [{key,label}]，fmt(score, entry) → 显示文本
+  async function show(game, boards, fmt, title = '🏆 英雄榜') {
+    if (!enabled) return alert('英雄榜需要在线打开（game.satloot.com）');
+    ensureCss(); if (typeof boards === 'string') boards = [{ key: boards, label: '' }];
+    const ov = document.createElement('div'); ov.className = 'lb-ov';
+    ov.innerHTML = `<div class="lb-panel"><button class="lb-x" title="关闭">✕</button><h3>${esc(title)}<small>前 ${CAP} 名</small></h3>${boards.length > 1 ? `<div class="lb-tabs">${boards.map((b, i) => `<button data-k="${esc(b.key)}"${i ? '' : ' class="on"'}>${esc(b.label)}</button>`).join('')}</div>` : ''}<ul class="lb-list"><li class="lb-empty">加载中…</li></ul></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove(); ov.querySelector('.lb-x').onclick = close; ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); window.removeEventListener('keydown', onKey, true); } }; window.addEventListener('keydown', onKey, true);
+    const ul = ov.querySelector('.lb-list');
+    const loadBoard = async k => { ul.innerHTML = '<li class="lb-empty">加载中…</li>'; try { const j = await fetchList(game, k); renderList(ul, j.list, fmt); } catch (e) { ul.innerHTML = '<li class="lb-empty">榜单暂时打不开</li>'; } };
+    ov.querySelectorAll('.lb-tabs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.lb-tabs button').forEach(x => x.classList.toggle('on', x === b)); loadBoard(b.dataset.k); });
+    loadBoard(boards[0].key);
+  }
+  // 在结算面板里给出「留名上榜」：host 为容器元素
+  function offer(host, { game, board, score, meta, fmt, boards, title }) {
+    if (!host) return; host.innerHTML = '';
+    if (!enabled || !(score > 0)) return;
+    ensureCss(); const box = document.createElement('div'); box.className = 'lb-offer'; box.innerHTML = '🏆 英雄榜 · 查询中…'; host.appendChild(box);
+    const showLink = () => `<a class="lb-view">查看榜单</a>`;
+    const bind = () => { const a = box.querySelector('.lb-view'); if (a) a.onclick = () => show(game, boards || board, fmt, title); };
+    fetchList(game, board).then(j => {
+      if (!qualifies(j.list, j.dir, score)) { box.innerHTML = `本局 <b>${esc(fmt(score, { meta }))}</b> 未进前 ${CAP} 名 · ${showLink()}`; bind(); return; }
+      const rankGuess = j.list.filter(e => j.dir === 'desc' ? e.score >= score : e.score <= score).length + 1;
+      box.innerHTML = `🎉 <b>${esc(fmt(score, { meta }))}</b> 能排到第 <b>${rankGuess}</b> 名！留个名字上榜：<div class="row"><input maxlength="12" placeholder="你的名字（最多 12 字）" value="${esc(getName())}"><button>留名上榜</button></div>`;
+      const inp = box.querySelector('input'), btn = box.querySelector('button');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+      btn.onclick = async () => {
+        const name = inp.value.trim(); if (!name) { inp.focus(); return; } setName(name); btn.disabled = true; btn.textContent = '提交中…';
+        try { const r = await submit(game, board, name, score, meta); box.innerHTML = `<span class="ok">✔ 上榜成功，第 ${r.rank} 名！</span> ${showLink()}`; bind(); }
+        catch (e) { btn.disabled = false; btn.textContent = '重试'; const m = /too many/.test(e.message) ? '提交太频繁，稍后再试' : /range/.test(e.message) ? '成绩不在合理范围' : '提交失败'; let t = box.querySelector('.lb-err'); if (!t) { t = document.createElement('div'); t.className = 'lb-err'; box.appendChild(t); } t.textContent = m; }
+      };
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    }).catch(() => { box.innerHTML = '🏆 英雄榜暂时打不开'; });
+  }
+  return { enabled, show, offer, getName, fetchList, submit, CAP };
+})();
+/* @lb-end */
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const rint = n => Math.floor(rnd() * n);
+const KEY = 'gh:snake:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const N = 20;
+let cell = 20, side = 400;
+let snake = [], dir = [1, 0], nextDirs = [], food = null, gold = null, goldTtl = 0, score = 0, best = store.get('best', 0), eaten = 0;
+let state = 'title'; // title | play | pause | over
+let tickMs = 150, acc = 0, last = 0, prevSnake = [], grow = 0, flash = 0, particles = [];
+const speedLevel = () => Math.min(10, 1 + Math.floor(eaten / 5));
+const speedMs = () => Math.max(65, 150 - (speedLevel() - 1) * 9);
+
+function layout() {
+  const st = $('.stage'); const w = st.clientWidth - 20, h = st.clientHeight - 14;
+  side = Math.max(240, Math.min(560, w, h)); cell = side / N;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.style.width = cv.style.height = side + 'px'; cv.width = cv.height = Math.round(side * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw(1);
+}
+function reset() {
+  snake = [[9, 10], [8, 10], [7, 10]]; prevSnake = snake.map(p => p.slice()); dir = [1, 0]; nextDirs = []; score = 0; eaten = 0; grow = 0; gold = null; goldTtl = 0; particles = [];
+  tickMs = speedMs(); acc = 0; placeFood();
+}
+function freeCell() { const occ = new Set(snake.map(p => p[0] * N + p[1])); if (food) occ.add(food[0] * N + food[1]); if (gold) occ.add(gold[0] * N + gold[1]); const free = []; for (let i = 0; i < N * N; i++) if (!occ.has(i)) free.push(i); if (!free.length) return null; const k = free[rint(free.length)]; return [Math.floor(k / N), k % N]; }
+function placeFood() { food = freeCell(); }
+function start() { reset(); state = 'play'; hideOv(); updateHud(); last = performance.now(); }
+function setDir(d) {
+  const cur = nextDirs.length ? nextDirs[nextDirs.length - 1] : dir;
+  if (d[0] === -cur[0] && d[1] === -cur[1]) return; if (d[0] === cur[0] && d[1] === cur[1]) return;
+  if (nextDirs.length < 2) nextDirs.push(d);
+  if (state === 'title') start(); else if (state === 'pause') resume();
+}
+function step() {
+  if (nextDirs.length) dir = nextDirs.shift();
+  prevSnake = snake.map(p => p.slice());
+  const h = snake[0], nh = [h[0] + dir[0], h[1] + dir[1]];
+  if (nh[0] < 0 || nh[0] >= N || nh[1] < 0 || nh[1] >= N) return die();
+  const tailIdx = grow > 0 ? snake.length : snake.length - 1;
+  for (let i = 0; i < tailIdx; i++) if (snake[i][0] === nh[0] && snake[i][1] === nh[1]) return die();
+  snake.unshift(nh);
+  if (grow > 0) grow--; else snake.pop();
+  if (food && nh[0] === food[0] && nh[1] === food[1]) { eat(10, food, '#f87171'); placeFood(); if (!gold && eaten % 4 === 0 && rnd() < 0.7) { gold = freeCell(); goldTtl = 40 + rint(20); } }
+  else if (gold && nh[0] === gold[0] && nh[1] === gold[1]) { eat(50, gold, '#facc15'); gold = null; }
+  if (gold && --goldTtl <= 0) gold = null;
+  if (snake.length >= N * N) { state = 'over'; showOv('🏆 通关！', `你填满了整张棋盘 · ${score} 分`, [['再来一局', start]]); }
+}
+function eat(pts, at, color) {
+  score += pts; eaten++; grow += pts >= 50 ? 3 : 1; if (score > best) { best = score; store.set('best', best); }
+  tickMs = speedMs(); flash = 1;
+  for (let i = 0; i < 10; i++) { const a = rnd() * Math.PI * 2, s = 1.5 + rnd() * 2.5; particles.push({ x: (at[0] + .5) * cell, y: (at[1] + .5) * cell, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, color }); }
+  SFX.tone(pts >= 50 ? 880 : 520 + Math.min(eaten, 30) * 8, 0.09, 'square', 0.08, pts >= 50 ? 1320 : 760);
+  updateHud();
+}
+function die() { state = 'over'; SFX.tone(220, 0.35, 'sawtooth', 0.12, 55); flash = 1; updateHud(); showOv('撞到了！', `本局 ${score} 分 · 长度 ${snake.length} · 最高 ${best} 分`, [['再来一局', start]]); LB.offer($('#ovLB'), { game: 'snake', board: 'score', score, meta: { len: snake.length }, fmt: lbFmt }); }
+function pause() { if (state !== 'play') return; state = 'pause'; showOv('已暂停', '按 Esc / P 或点击继续', [['继续', resume]]); }
+function resume() { if (state !== 'pause') return; state = 'play'; hideOv(); last = performance.now(); }
+function updateHud() { $('#score').textContent = score; $('#best').textContent = best; $('#spd').textContent = speedLevel(); $('#btnPause').textContent = state === 'pause' ? '▶' : '⏸'; }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').innerHTML = p; const b = $('#ovB'); b.innerHTML = ''; $('#ovLB').innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+
+function draw(k) {
+  ctx.clearRect(0, 0, side, side);
+  ctx.fillStyle = '#16213e'; ctx.fillRect(0, 0, side, side);
+  ctx.fillStyle = 'rgba(255,255,255,.025)';
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if ((r + c) & 1) ctx.fillRect(c * cell, r * cell, cell, cell);
+  if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.12})`; ctx.fillRect(0, 0, side, side); }
+  // 果子
+  if (food) drawFood(food, '#f87171', '#7f1d1d', 1);
+  if (gold) { const pulse = 0.9 + 0.1 * Math.sin(performance.now() / 120); drawFood(gold, '#facc15', '#854d0e', pulse); ctx.fillStyle = 'rgba(250,204,21,.8)'; ctx.font = `bold ${cell * 0.5}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(goldTtl, (gold[0] + .5) * cell, (gold[1] - .35) * cell); }
+  // 蛇：按 k 在上一格与当前格之间插值
+  const pts = snake.map((p, i) => { const q = prevSnake[i] || prevSnake[prevSnake.length - 1] || p; return [(q[0] + (p[0] - q[0]) * k + .5) * cell, (q[1] + (p[1] - q[1]) * k + .5) * cell]; });
+  const w = cell * 0.78;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (pts.length > 1) {
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.strokeStyle = '#166534'; ctx.lineWidth = w + 3; ctx.stroke();
+    const gr = ctx.createLinearGradient(pts[0][0], pts[0][1], pts[pts.length - 1][0], pts[pts.length - 1][1]); gr.addColorStop(0, '#4ade80'); gr.addColorStop(1, '#22c55e');
+    ctx.strokeStyle = gr; ctx.lineWidth = w; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = w * 0.3; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke();
+  }
+  // 头 + 眼睛
+  const [hx, hy] = pts[0]; ctx.fillStyle = '#86efac'; ctx.beginPath(); ctx.arc(hx, hy, w / 2 + 1, 0, Math.PI * 2); ctx.fill();
+  const ex = dir[1] * 0.22 * cell, ey = -dir[0] * 0.22 * cell, fx = dir[0] * 0.12 * cell, fy = dir[1] * 0.12 * cell;
+  for (const sgn of [1, -1]) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(hx + fx + ex * sgn, hy + fy + ey * sgn, cell * 0.13, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#052e16'; ctx.beginPath(); ctx.arc(hx + fx * 1.6 + ex * sgn, hy + fy * 1.6 + ey * sgn, cell * 0.065, 0, Math.PI * 2); ctx.fill(); }
+  // 粒子
+  for (const p of particles) { ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, cell * 0.12 * p.life, 0, Math.PI * 2); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+function drawFood(p, c1, c2, sc) {
+  const x = (p[0] + .5) * cell, y = (p[1] + .5) * cell, r = cell * 0.36 * sc;
+  ctx.fillStyle = c1; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#4d7c0f'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x + r * 0.3, y - r * 1.3, x + r * 0.5, y - r * 1.1); ctx.stroke();
+}
+function frame(now) {
+  const dt = Math.min(50, now - last); last = now;
+  if (state === 'play') { acc += dt; while (acc >= tickMs) { acc -= tickMs; step(); if (state !== 'play') { acc = 0; break; } } }
+  flash = Math.max(0, flash - dt / 250);
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life -= dt / 500; } particles = particles.filter(p => p.life > 0);
+  draw(state === 'play' ? Math.min(1, acc / tickMs) : 1);
+  requestAnimationFrame(frame);
+}
+
+// 输入
+const KEYS = { ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0], ArrowUp: [0, -1], w: [0, -1], W: [0, -1], ArrowRight: [1, 0], d: [1, 0], D: [1, 0], ArrowDown: [0, 1], s: [0, 1], S: [0, 1] };
+window.addEventListener('keydown', e => { SFX.unlock(); if (e.key in KEYS) { e.preventDefault(); if (state === 'over') return; setDir(KEYS[e.key]); } else if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') { state === 'play' ? pause() : resume(); } else if (e.key === 'r' || e.key === 'R') start(); else if (e.key === ' ' || e.key === 'Enter') { if (state === 'title' || state === 'over') start(); else if (state === 'pause') resume(); } });
+let sx = 0, sy = 0, sw = false;
+const stage = $('.stage');
+stage.addEventListener('pointerdown', e => { SFX.unlock(); sx = e.clientX; sy = e.clientY; sw = true; });
+stage.addEventListener('pointermove', e => { if (!sw) return; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.hypot(dx, dy) < 22) return; sw = false; if (state === 'over') return; setDir(Math.abs(dx) > Math.abs(dy) ? [dx > 0 ? 1 : -1, 0] : [0, dy > 0 ? 1 : -1]); });
+stage.addEventListener('pointerup', () => { sw = false; }); stage.addEventListener('pointercancel', () => { sw = false; });
+$('#btnPause').onclick = () => { if (state === 'play') pause(); else if (state === 'pause') resume(); else if (state !== 'over') start(); };
+const LBB = 'score', lbFmt = v => v + ' 分';
+$('#btnLB').onclick = () => LB.show('snake', LBB, lbFmt);
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('resize', layout);
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+
+reset(); updateHud();
+if (STILL) {
+  snake = []; const path = [[12, 6], [12, 7], [12, 8], [12, 9], [13, 9], [14, 9], [15, 9], [15, 10], [15, 11], [14, 11], [13, 11], [12, 11], [11, 11], [10, 11], [9, 11], [9, 10], [9, 9], [8, 9]];
+  snake = path; prevSnake = snake.map(p => p.slice()); dir = [0, -1]; food = [5, 5]; gold = [16, 14]; goldTtl = 23; score = 260; eaten = 12; updateHud();
+  hideOv(); layout(); document.title = 'STILL-READY';
+  let n = 0; (function redraw() { layout(); if (++n < 10) requestAnimationFrame(redraw); })();
+} else {
+  showOv('🐍 贪吃蛇', '方向键 / WASD 转向，触屏划动<br>金色果子限时出现，值 5 倍分', [['开始', start]]);
+  layout(); requestAnimationFrame(layout); last = performance.now(); requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>

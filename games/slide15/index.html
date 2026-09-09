@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>数字华容道</title>
+<style>
+:root{--bg:#f6f1ff;--ink:#2d1f4d;--ink2:#7a6a9c;--acc:#7c3aed}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column;
+  background-image:radial-gradient(600px 300px at 10% -10%,rgba(124,58,237,.12),transparent 60%),radial-gradient(500px 300px at 100% 0%,rgba(236,72,153,.10),transparent 60%)}
+.top{display:flex;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 6px;flex-wrap:wrap}
+.ttl{font-size:22px;font-weight:900;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);margin-top:5px}
+.stat{background:#fff;border:1px solid #e9e2f7;border-radius:8px;padding:5px 12px;min-width:64px;text-align:center;line-height:1.15}
+.stat span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ink2)}
+.stat b{display:block;font-size:19px}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:8px 12px;background:var(--acc);color:#fff;cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:#ebe4f7;color:var(--ink)}
+select{font:inherit;font-weight:700;border:1px solid #e9e2f7;border-radius:8px;padding:7px 8px;background:#fff;color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:4px 10px 10px;min-height:0}
+canvas{display:block;touch-action:none;border-radius:14px;box-shadow:0 16px 40px -16px rgba(45,31,77,.4)}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(246,241,255,.6);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#fff;border-radius:16px;padding:24px 28px;box-shadow:0 20px 60px -20px rgba(45,31,77,.4);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:26px;font-weight:900}
+.panel p{margin:0 0 16px;color:var(--ink2);font-size:14px}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">🧩 数字华容道<small>把打乱的数字滑回 1 → N 顺序</small></div>
+  <select id="size"><option value="3">3×3</option><option value="4">4×4</option><option value="5">5×5</option></select>
+  <div class="stat"><span>步数</span><b id="moves">0</b></div>
+  <div class="stat"><span>用时</span><b id="time">0:00</b></div>
+  <div class="stat"><span>最佳</span><b id="best">—</b></div>
+  <button id="btnNew" title="重新打乱 (R)">打乱</button>
+  <button class="ghost" id="btnLB" title="英雄榜">🏆</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov" hidden><div class="panel"><h2 id="ovT"></h2><p id="ovP"></p><div id="ovLB"></div><div class="row" id="ovB"></div></div></div>
+</div>
+<div class="tip">点击与空格同行 / 同列的方块即可滑动（可一次推多块）· 方向键把方块推进空格 · R 重新打乱</div>
+<script>
+'use strict';
+/* @lb-start */
+/* 英雄榜客户端（由 tools/inject.mjs 注入到每个自制游戏，源文件 games/_shared/leaderboard.js，改这里再 node tools/inject.mjs） */
+const LB = (() => {
+  const API = '/api/scores', CAP = 20, NAME_KEY = 'gh:name';
+  const enabled = /^https?:$/.test(location.protocol);
+  const getName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+  const setName = n => { try { localStorage.setItem(NAME_KEY, n); } catch (e) {} };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CSS = `.lb-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.lb-panel{width:min(92vw,420px);max-height:86vh;overflow:auto;background:#161b2c;color:#e8ecf5;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 70px -20px rgba(0,0,0,.8);position:relative}
+.lb-panel h3{margin:0 0 4px;font-size:18px;font-weight:900;padding-right:36px}.lb-panel h3 small{color:#8b93a7;font-weight:500;font-size:12px;margin-left:8px}
+.lb-x{position:absolute;right:10px;top:10px;width:30px;height:30px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8ecf5;font-size:16px;cursor:pointer}
+.lb-tabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}.lb-tabs button{font:inherit;font-size:12.5px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab3c8;border-radius:999px;padding:5px 11px;cursor:pointer}.lb-tabs button.on{background:#ffd166;color:#1a1200;border-color:#ffd166}
+.lb-list{list-style:none;margin:0;padding:0}.lb-list li{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:14px}.lb-list li:nth-child(1) .lb-rk{background:#ffd166;color:#1a1200}.lb-list li:nth-child(2) .lb-rk{background:#cfd6e4;color:#1a1200}.lb-list li:nth-child(3) .lb-rk{background:#d9a066;color:#1a1200}
+.lb-rk{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex:none}.lb-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.lb-sc{font-weight:800;white-space:nowrap}.lb-dt{color:#5f677a;font-size:11.5px;white-space:nowrap}
+.lb-empty,.lb-note{color:#8b93a7;font-size:13px;text-align:center;padding:14px 0}.lb-list li.me{background:rgba(255,209,102,.12);border-radius:8px}
+.lb-offer{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);text-align:left;font-size:13.5px;line-height:1.5;color:inherit}
+.lb-offer b{color:#d98f00}.lb-offer .row{display:flex;gap:8px;margin-top:8px}.lb-offer input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.4);background:rgba(255,255,255,.9);color:#111}
+.lb-offer button{font:inherit;font-weight:800;font-size:13.5px;border:0;border-radius:8px;padding:8px 12px;background:#ffb703;color:#1a1200;cursor:pointer;white-space:nowrap}.lb-offer button[disabled]{opacity:.6;cursor:default}.lb-offer a{color:#d98f00;font-weight:700;cursor:pointer;text-decoration:underline}
+.lb-offer .ok{color:#2a9d4a;font-weight:800}`;
+  function ensureCss() { if (!document.getElementById('lb-css')) { const s = document.createElement('style'); s.id = 'lb-css'; s.textContent = CSS; document.head.appendChild(s); } }
+  const fmtDate = at => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  async function fetchList(game, board, limit = CAP) { const r = await fetch(`${API}?game=${encodeURIComponent(game)}&board=${encodeURIComponent(board)}&limit=${limit}`, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status); return r.json(); }
+  async function submit(game, board, name, score, meta) { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game, board, name, score, meta }) }); const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || ('http ' + r.status)); return j; }
+  const qualifies = (list, dir, score) => list.length < CAP || (dir === 'desc' ? score > list[list.length - 1].score : score < list[list.length - 1].score);
+  function renderList(ul, list, fmt, meId) {
+    ul.innerHTML = list.length ? list.map(e => `<li${meId && e.id === meId ? ' class="me"' : ''}><span class="lb-rk">${e.rank}</span><span class="lb-nm">${esc(e.name)}</span><span class="lb-sc">${esc(fmt(e.score, e))}</span><span class="lb-dt">${fmtDate(e.at)}</span></li>`).join('') : '<li class="lb-empty">还没有人上榜，来当第一个！</li>';
+  }
+  // 弹出榜单：boards = [{key,label}]，fmt(score, entry) → 显示文本
+  async function show(game, boards, fmt, title = '🏆 英雄榜') {
+    if (!enabled) return alert('英雄榜需要在线打开（game.satloot.com）');
+    ensureCss(); if (typeof boards === 'string') boards = [{ key: boards, label: '' }];
+    const ov = document.createElement('div'); ov.className = 'lb-ov';
+    ov.innerHTML = `<div class="lb-panel"><button class="lb-x" title="关闭">✕</button><h3>${esc(title)}<small>前 ${CAP} 名</small></h3>${boards.length > 1 ? `<div class="lb-tabs">${boards.map((b, i) => `<button data-k="${esc(b.key)}"${i ? '' : ' class="on"'}>${esc(b.label)}</button>`).join('')}</div>` : ''}<ul class="lb-list"><li class="lb-empty">加载中…</li></ul></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove(); ov.querySelector('.lb-x').onclick = close; ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); window.removeEventListener('keydown', onKey, true); } }; window.addEventListener('keydown', onKey, true);
+    const ul = ov.querySelector('.lb-list');
+    const loadBoard = async k => { ul.innerHTML = '<li class="lb-empty">加载中…</li>'; try { const j = await fetchList(game, k); renderList(ul, j.list, fmt); } catch (e) { ul.innerHTML = '<li class="lb-empty">榜单暂时打不开</li>'; } };
+    ov.querySelectorAll('.lb-tabs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.lb-tabs button').forEach(x => x.classList.toggle('on', x === b)); loadBoard(b.dataset.k); });
+    loadBoard(boards[0].key);
+  }
+  // 在结算面板里给出「留名上榜」：host 为容器元素
+  function offer(host, { game, board, score, meta, fmt, boards, title }) {
+    if (!host) return; host.innerHTML = '';
+    if (!enabled || !(score > 0)) return;
+    ensureCss(); const box = document.createElement('div'); box.className = 'lb-offer'; box.innerHTML = '🏆 英雄榜 · 查询中…'; host.appendChild(box);
+    const showLink = () => `<a class="lb-view">查看榜单</a>`;
+    const bind = () => { const a = box.querySelector('.lb-view'); if (a) a.onclick = () => show(game, boards || board, fmt, title); };
+    fetchList(game, board).then(j => {
+      if (!qualifies(j.list, j.dir, score)) { box.innerHTML = `本局 <b>${esc(fmt(score, { meta }))}</b> 未进前 ${CAP} 名 · ${showLink()}`; bind(); return; }
+      const rankGuess = j.list.filter(e => j.dir === 'desc' ? e.score >= score : e.score <= score).length + 1;
+      box.innerHTML = `🎉 <b>${esc(fmt(score, { meta }))}</b> 能排到第 <b>${rankGuess}</b> 名！留个名字上榜：<div class="row"><input maxlength="12" placeholder="你的名字（最多 12 字）" value="${esc(getName())}"><button>留名上榜</button></div>`;
+      const inp = box.querySelector('input'), btn = box.querySelector('button');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+      btn.onclick = async () => {
+        const name = inp.value.trim(); if (!name) { inp.focus(); return; } setName(name); btn.disabled = true; btn.textContent = '提交中…';
+        try { const r = await submit(game, board, name, score, meta); box.innerHTML = `<span class="ok">✔ 上榜成功，第 ${r.rank} 名！</span> ${showLink()}`; bind(); }
+        catch (e) { btn.disabled = false; btn.textContent = '重试'; const m = /too many/.test(e.message) ? '提交太频繁，稍后再试' : /range/.test(e.message) ? '成绩不在合理范围' : '提交失败'; let t = box.querySelector('.lb-err'); if (!t) { t = document.createElement('div'); t.className = 'lb-err'; box.appendChild(t); } t.textContent = m; }
+      };
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    }).catch(() => { box.innerHTML = '🏆 英雄榜暂时打不开'; });
+  }
+  return { enabled, show, offer, getName, fetchList, submit, CAP };
+})();
+/* @lb-end */
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const KEY = 'gh:slide15:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+let N = store.get('size', 4), tiles = [], pos = [], moves = 0, elapsed = 0, t0 = 0, timer = 0, state = 'idle', side = 400, cell = 100, gap = 8, looping = false, lastT = 0, solvedFlash = 0;
+// tiles[i] = 编号（0 = 空格）；pos[v] = {x,y}（显示位置，动画用）
+function solved() { for (let i = 0; i < N * N - 1; i++) if (tiles[i] !== i + 1) return false; return true; }
+function newGame() {
+  tiles = Array.from({ length: N * N }, (_, i) => (i + 1) % (N * N));
+  let blank = N * N - 1, prev = -1; const steps = N * N * N * 6;
+  for (let k = 0; k < steps; k++) { const bx = blank % N, by = (blank / N) | 0; const opts = []; if (bx > 0) opts.push(blank - 1); if (bx < N - 1) opts.push(blank + 1); if (by > 0) opts.push(blank - N); if (by < N - 1) opts.push(blank + N); const cand = opts.filter(o => o !== prev); const j = cand[Math.floor(rnd() * cand.length)]; tiles[blank] = tiles[j]; tiles[j] = 0; prev = blank; blank = j; }
+  if (solved()) return newGame();
+  pos = []; tiles.forEach((v, i) => { pos[v] = { x: i % N, y: (i / N) | 0 }; });
+  moves = 0; elapsed = 0; clearInterval(timer); state = 'idle'; solvedFlash = 0; hideOv(); hud(); layout();
+}
+function startTimer() { if (state !== 'idle') return; state = 'play'; t0 = performance.now(); timer = setInterval(() => { elapsed = Math.floor((performance.now() - t0) / 1000); hud(); }, 500); }
+function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function hud() { $('#moves').textContent = moves; $('#time').textContent = fmt(elapsed); const b = store.get('best' + N, null); $('#best').textContent = b ? b.moves + ' 步' : '—'; $('#best').title = b ? '用时 ' + fmt(b.time) : ''; }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').innerHTML = p; const b = $('#ovB'); b.innerHTML = ''; $('#ovLB').innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+function slide(i) { // 点了格子 i：若与空格同行/同列，把中间的整段推过去
+  if (state === 'won') return; const blank = tiles.indexOf(0); const bx = blank % N, by = (blank / N) | 0, x = i % N, y = (i / N) | 0;
+  if (i === blank || (x !== bx && y !== by)) { SFX.tone(180, 0.04, 'sine', 0.05); return; }
+  startTimer(); const step = x === bx ? (y > by ? N : -N) : (x > bx ? 1 : -1); let cur = blank; let n = 0;
+  while (cur !== i) { const nx = cur + step; tiles[cur] = tiles[nx]; tiles[nx] = 0; cur = nx; n++; }
+  moves += n; SFX.tone(420 + n * 40, 0.05, 'triangle', 0.1, 520); hud(); loop();
+  if (solved()) win();
+}
+function win() { state = 'won'; clearInterval(timer); elapsed = Math.floor((performance.now() - t0) / 1000); const k = 'best' + N, b = store.get(k, null); const isBest = !b || moves < b.moves || (moves === b.moves && elapsed < b.time); if (isBest) store.set(k, { moves, time: elapsed }); hud(); solvedFlash = 1; loop(); SFX.tone(660, 0.12, 'square', 0.1, 990); setTimeout(() => SFX.tone(990, 0.3, 'square', 0.1, 1320), 130); const n = N, mv = moves, tm = elapsed; setTimeout(() => { showOv('🎉 复原了！', `${mv} 步 · 用时 ${fmt(tm)}${isBest ? ' · 新纪录！' : ' · 最佳 ' + b.moves + ' 步'}`, [['再来一局', newGame]]); LB.offer($('#ovLB'), { game: 'slide15', board: 'moves' + n, score: mv + Math.min(tm, 99999) / 100000, meta: { time: tm }, fmt: lbFmt, boards: LBB }); }, 600); }
+
+function layout() { const st = $('.stage'); side = Math.max(240, Math.min(520, st.clientWidth - 20, st.clientHeight - 14)); gap = Math.round(side * 0.02); cell = (side - gap * (N + 1)) / N; const dpr = Math.min(window.devicePixelRatio || 1, 3); cv.style.width = cv.style.height = side + 'px'; cv.width = cv.height = Math.round(side * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
+function draw() {
+  ctx.clearRect(0, 0, side, side); ctx.fillStyle = '#d9cdf3'; rr(0, 0, side, side, side * 0.03); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; for (let i = 0; i < N * N; i++) { rr(gap + (i % N) * (cell + gap), gap + ((i / N) | 0) * (cell + gap), cell, cell, cell * 0.12); ctx.fill(); }
+  for (let v = 1; v < N * N; v++) {
+    const p = pos[v]; const x = gap + p.x * (cell + gap), y = gap + p.y * (cell + gap); const home = tiles.indexOf(v) === v - 1;
+    const hue = 262 - (v / (N * N)) * 60; const g = ctx.createLinearGradient(x, y, x, y + cell); g.addColorStop(0, `hsl(${hue},70%,${home ? 62 : 55}%)`); g.addColorStop(1, `hsl(${hue},70%,${home ? 50 : 42}%)`);
+    ctx.fillStyle = 'rgba(45,31,77,.25)'; rr(x, y + cell * 0.05, cell, cell, cell * 0.12); ctx.fill();
+    ctx.fillStyle = g; rr(x, y, cell, cell, cell * 0.12); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; rr(x, y, cell, cell * 0.45, cell * 0.12); ctx.fill();
+    if (solvedFlash > 0) { ctx.fillStyle = `rgba(255,255,255,${solvedFlash * 0.5 * Math.abs(Math.sin(v))})`; rr(x, y, cell, cell, cell * 0.12); ctx.fill(); }
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${cell * (N > 4 ? 0.42 : 0.46)}px "Segoe UI",Roboto,Arial,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 4; ctx.fillText(v, x + cell / 2, y + cell / 2 + cell * 0.03); ctx.shadowBlur = 0;
+  }
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function loop() { if (looping || STILL) return; looping = true; lastT = performance.now(); requestAnimationFrame(tick); }
+function tick(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now; let anim = false;
+  tiles.forEach((v, i) => { if (!v) return; const tx = i % N, ty = (i / N) | 0, p = pos[v]; const k = Math.min(1, dt * 16); p.x += (tx - p.x) * k; p.y += (ty - p.y) * k; if (Math.abs(tx - p.x) > 0.005 || Math.abs(ty - p.y) > 0.005) anim = true; else { p.x = tx; p.y = ty; } });
+  if (solvedFlash > 0) { solvedFlash = Math.max(0, solvedFlash - dt); anim = true; }
+  draw(); if (anim) requestAnimationFrame(tick); else looping = false;
+}
+cv.addEventListener('pointerdown', e => { SFX.unlock(); e.preventDefault(); const r = cv.getBoundingClientRect(); const x = Math.floor((e.clientX - r.left - gap / 2) / (cell + gap)), y = Math.floor((e.clientY - r.top - gap / 2) / (cell + gap)); if (x < 0 || x >= N || y < 0 || y >= N) return; slide(y * N + x); });
+window.addEventListener('keydown', e => { const blank = tiles.indexOf(0); const bx = blank % N, by = (blank / N) | 0; let i = -1; if (e.key === 'ArrowUp' && by < N - 1) i = blank + N; else if (e.key === 'ArrowDown' && by > 0) i = blank - N; else if (e.key === 'ArrowLeft' && bx < N - 1) i = blank + 1; else if (e.key === 'ArrowRight' && bx > 0) i = blank - 1; else if (e.key === 'r' || e.key === 'R') newGame(); if (i >= 0) { e.preventDefault(); slide(i); } });
+$('#btnNew').onclick = newGame; $('#size').value = N; $('#size').onchange = e => { N = +e.target.value; store.set('size', N); newGame(); };
+const LBB = [{ key: 'moves3', label: '3×3' }, { key: 'moves4', label: '4×4' }, { key: 'moves5', label: '5×5' }], lbFmt = (v, e) => Math.floor(v) + ' 步' + (e && e.meta && e.meta.time != null ? ' · ' + fmt(e.meta.time) : '');
+$('#btnLB').onclick = () => LB.show('slide15', LBB, lbFmt);
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('resize', layout);
+
+newGame();
+if (STILL) { N = 4; newGame(); moves = 37; elapsed = 58; hud(); document.title = 'STILL-READY'; let k = 0; (function redraw() { layout(); if (++k < 10) requestAnimationFrame(redraw); })(); }
+else requestAnimationFrame(layout);
+</script>
+</body>
+</html>

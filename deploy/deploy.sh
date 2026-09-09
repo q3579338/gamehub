@@ -36,6 +36,9 @@ while read -r id; do
   [ -s "$SITE/shots/$id.jpg" ]    || { echo "!! 缺封面 site/shots/$id.jpg（先跑截图流水线，见 README）"; exit 1; }
 done < <(node -e "for(const g of require('./games.json').games)console.log(g.id)")
 [ -s "$SITE/index.html" ] || { echo "!! 缺 site/index.html"; exit 1; }
+for p in en/index.html en/play/index.html en/hall/index.html hall/index.html play/index.html; do
+  [ -s "$SITE/$p" ] || { echo "!! 缺 site/$p（node tools/build.mjs 应同时产出中英两套页面）"; exit 1; }
+done
 [ -f "$CONF" ] || { echo "!! 找不到 $CONF"; exit 1; }
 
 SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 "$HOST")
@@ -46,6 +49,12 @@ tar czf "$TGZ" -C "$SITE" .
 echo "==> 推站点包（$(du -h "$TGZ" | cut -f1)）"
 "${SCP[@]}" "$TGZ" "$HOST:/tmp/gamehub.tgz"
 rm -f "$TGZ"
+
+echo "==> 推英雄榜服务（/opt/gamehub/server + systemd gamehub-scores）"
+"${SSH[@]}" "mkdir -p /opt/gamehub/server /var/lib/gamehub && chown www-data:www-data /var/lib/gamehub"
+"${SCP[@]}" "$HERE/server/scores.mjs" "$HOST:/opt/gamehub/server/scores.mjs"
+"${SCP[@]}" "$HERE/deploy/gamehub-scores.service" "$HOST:/etc/systemd/system/gamehub-scores.service"
+"${SSH[@]}" "systemctl daemon-reload && systemctl enable --quiet gamehub-scores && systemctl restart gamehub-scores && sleep 1 && systemctl is-active gamehub-scores"
 
 echo "==> 推 nginx 站点配置"
 "${SCP[@]}" "$CONF" "$HOST:/etc/nginx/sites-available/$DOMAIN"
@@ -73,9 +82,9 @@ echo "==> 服务器端：解包换目录 + 启用站点 + 校验配置"
     echo '   站点文件：'; du -sh $WEBROOT; ls $WEBROOT/g"
 
 echo "==> 回源自检（绕过 Cloudflare，直连源站）"
-"${SSH[@]}" "for p in / /play/?g=tuanzi-tetris /g/tuanzi-tetris/index.html /shots/tuanzi-tetris.jpg /sitemap.xml; do
+"${SSH[@]}" "for p in / /en/ /play/?g=tuanzi-tetris /en/play/?g=tuanzi-tetris /g/tuanzi-tetris/index.html /shots/tuanzi-tetris.jpg /sitemap.xml /hall/ /en/hall/ /api/health \"/api/scores?game=minesweeper&board=time0\"; do
     curl -s -o /dev/null -w \"   %{http_code}  \$p  (%{size_download} B)\n\" -H 'Host: $DOMAIN' \"http://127.0.0.1\$p\"; done"
 
 echo
-echo "完成：https://$DOMAIN/"
+echo "完成：https://$DOMAIN/  ·  英文版 https://$DOMAIN/en/"
 echo "（若域名还没在 Cloudflare 加 A 记录指向源站（橙云代理），公网仍打不开；加上即生效。）"

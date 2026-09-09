@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>2048</title>
+<style>
+:root{--bg:#faf8ef;--ink:#776e65;--ink2:#9c948a;--board:#bbada0;--cell:#cdc1b4;--btn:#8f7a66;--btn-ink:#f9f6f2}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei","Noto Sans SC",-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:10px;padding:max(10px,env(safe-area-inset-top)) 14px 8px;flex-wrap:wrap}
+.ttl{font-size:30px;font-weight:900;letter-spacing:-.5px;line-height:1;margin-right:auto}
+.ttl small{display:block;font-size:12px;font-weight:500;color:var(--ink2);letter-spacing:.3px;margin-top:5px}
+.stat{background:var(--board);color:#eee4da;border-radius:8px;padding:5px 12px;min-width:72px;text-align:center;line-height:1.15}
+.stat span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.85}
+.stat b{display:block;font-size:20px;color:#fff}
+.stat b.bump{animation:bump .25s}
+@keyframes bump{40%{transform:scale(1.18)}}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:8px;padding:9px 13px;background:var(--btn);color:var(--btn-ink);cursor:pointer;line-height:1.2}
+button:active{transform:translateY(1px)}
+button.ghost{background:#e8e0d3;color:var(--ink)}
+.stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:6px 10px 12px;min-height:0}
+canvas{display:block;touch-action:none;border-radius:10px}
+.tip{text-align:center;color:var(--ink2);font-size:12.5px;padding:0 12px max(10px,env(safe-area-inset-bottom))}
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(250,248,239,.72);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.ov[hidden]{display:none}
+.panel{text-align:center;background:#fff;border-radius:16px;padding:26px 30px;box-shadow:0 20px 60px -20px rgba(80,60,40,.45);max-width:88vw}
+.panel h2{margin:0 0 6px;font-size:30px;font-weight:900}
+.panel p{margin:0 0 18px;color:var(--ink2)}
+.panel .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ttl">2048<small>滑动合并相同数字，合出 2048</small></div>
+  <div class="stat"><span>分数</span><b id="score">0</b></div>
+  <div class="stat"><span>最高</span><b id="best">0</b></div>
+  <button class="ghost" id="btnUndo" title="撤销一步 (Z)">↶ 撤销</button>
+  <button id="btnNew" title="新局 (R)">新局</button>
+  <button class="ghost" id="btnLB" title="英雄榜">🏆</button>
+  <button class="ghost" id="btnMute" title="声音">🔊</button>
+</div>
+<div class="stage">
+  <canvas id="cv"></canvas>
+  <div class="ov" id="ov" hidden>
+    <div class="panel"><h2 id="ovT">游戏结束</h2><p id="ovP"></p><div id="ovLB"></div><div class="row" id="ovB"></div></div>
+  </div>
+</div>
+<div class="tip">← ↑ → ↓ / W A S D 滑动 · 触屏划动 · Z 撤销 · R 新局</div>
+<script>
+'use strict';
+/* @lb-start */
+/* 英雄榜客户端（由 tools/inject.mjs 注入到每个自制游戏，源文件 games/_shared/leaderboard.js，改这里再 node tools/inject.mjs） */
+const LB = (() => {
+  const API = '/api/scores', CAP = 20, NAME_KEY = 'gh:name';
+  const enabled = /^https?:$/.test(location.protocol);
+  const getName = () => { try { return localStorage.getItem(NAME_KEY) || ''; } catch (e) { return ''; } };
+  const setName = n => { try { localStorage.setItem(NAME_KEY, n); } catch (e) {} };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const CSS = `.lb-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:rgba(8,10,20,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);font-family:"PingFang SC","Microsoft YaHei UI","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.lb-panel{width:min(92vw,420px);max-height:86vh;overflow:auto;background:#161b2c;color:#e8ecf5;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px 18px 14px;box-shadow:0 24px 70px -20px rgba(0,0,0,.8);position:relative}
+.lb-panel h3{margin:0 0 4px;font-size:18px;font-weight:900;padding-right:36px}.lb-panel h3 small{color:#8b93a7;font-weight:500;font-size:12px;margin-left:8px}
+.lb-x{position:absolute;right:10px;top:10px;width:30px;height:30px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#e8ecf5;font-size:16px;cursor:pointer}
+.lb-tabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}.lb-tabs button{font:inherit;font-size:12.5px;font-weight:700;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#aab3c8;border-radius:999px;padding:5px 11px;cursor:pointer}.lb-tabs button.on{background:#ffd166;color:#1a1200;border-color:#ffd166}
+.lb-list{list-style:none;margin:0;padding:0}.lb-list li{display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px dashed rgba(255,255,255,.08);font-size:14px}.lb-list li:nth-child(1) .lb-rk{background:#ffd166;color:#1a1200}.lb-list li:nth-child(2) .lb-rk{background:#cfd6e4;color:#1a1200}.lb-list li:nth-child(3) .lb-rk{background:#d9a066;color:#1a1200}
+.lb-rk{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12.5px;flex:none}.lb-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}.lb-sc{font-weight:800;white-space:nowrap}.lb-dt{color:#5f677a;font-size:11.5px;white-space:nowrap}
+.lb-empty,.lb-note{color:#8b93a7;font-size:13px;text-align:center;padding:14px 0}.lb-list li.me{background:rgba(255,209,102,.12);border-radius:8px}
+.lb-offer{margin:10px 0 4px;padding:10px 12px;border-radius:12px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);text-align:left;font-size:13.5px;line-height:1.5;color:inherit}
+.lb-offer b{color:#d98f00}.lb-offer .row{display:flex;gap:8px;margin-top:8px}.lb-offer input{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.4);background:rgba(255,255,255,.9);color:#111}
+.lb-offer button{font:inherit;font-weight:800;font-size:13.5px;border:0;border-radius:8px;padding:8px 12px;background:#ffb703;color:#1a1200;cursor:pointer;white-space:nowrap}.lb-offer button[disabled]{opacity:.6;cursor:default}.lb-offer a{color:#d98f00;font-weight:700;cursor:pointer;text-decoration:underline}
+.lb-offer .ok{color:#2a9d4a;font-weight:800}`;
+  function ensureCss() { if (!document.getElementById('lb-css')) { const s = document.createElement('style'); s.id = 'lb-css'; s.textContent = CSS; document.head.appendChild(s); } }
+  const fmtDate = at => { const d = new Date(at); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  async function fetchList(game, board, limit = CAP) { const r = await fetch(`${API}?game=${encodeURIComponent(game)}&board=${encodeURIComponent(board)}&limit=${limit}`, { cache: 'no-store' }); if (!r.ok) throw new Error('http ' + r.status); return r.json(); }
+  async function submit(game, board, name, score, meta) { const r = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ game, board, name, score, meta }) }); const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || ('http ' + r.status)); return j; }
+  const qualifies = (list, dir, score) => list.length < CAP || (dir === 'desc' ? score > list[list.length - 1].score : score < list[list.length - 1].score);
+  function renderList(ul, list, fmt, meId) {
+    ul.innerHTML = list.length ? list.map(e => `<li${meId && e.id === meId ? ' class="me"' : ''}><span class="lb-rk">${e.rank}</span><span class="lb-nm">${esc(e.name)}</span><span class="lb-sc">${esc(fmt(e.score, e))}</span><span class="lb-dt">${fmtDate(e.at)}</span></li>`).join('') : '<li class="lb-empty">还没有人上榜，来当第一个！</li>';
+  }
+  // 弹出榜单：boards = [{key,label}]，fmt(score, entry) → 显示文本
+  async function show(game, boards, fmt, title = '🏆 英雄榜') {
+    if (!enabled) return alert('英雄榜需要在线打开（game.satloot.com）');
+    ensureCss(); if (typeof boards === 'string') boards = [{ key: boards, label: '' }];
+    const ov = document.createElement('div'); ov.className = 'lb-ov';
+    ov.innerHTML = `<div class="lb-panel"><button class="lb-x" title="关闭">✕</button><h3>${esc(title)}<small>前 ${CAP} 名</small></h3>${boards.length > 1 ? `<div class="lb-tabs">${boards.map((b, i) => `<button data-k="${esc(b.key)}"${i ? '' : ' class="on"'}>${esc(b.label)}</button>`).join('')}</div>` : ''}<ul class="lb-list"><li class="lb-empty">加载中…</li></ul></div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove(); ov.querySelector('.lb-x').onclick = close; ov.addEventListener('pointerdown', e => { if (e.target === ov) close(); });
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); window.removeEventListener('keydown', onKey, true); } }; window.addEventListener('keydown', onKey, true);
+    const ul = ov.querySelector('.lb-list');
+    const loadBoard = async k => { ul.innerHTML = '<li class="lb-empty">加载中…</li>'; try { const j = await fetchList(game, k); renderList(ul, j.list, fmt); } catch (e) { ul.innerHTML = '<li class="lb-empty">榜单暂时打不开</li>'; } };
+    ov.querySelectorAll('.lb-tabs button').forEach(b => b.onclick = () => { ov.querySelectorAll('.lb-tabs button').forEach(x => x.classList.toggle('on', x === b)); loadBoard(b.dataset.k); });
+    loadBoard(boards[0].key);
+  }
+  // 在结算面板里给出「留名上榜」：host 为容器元素
+  function offer(host, { game, board, score, meta, fmt, boards, title }) {
+    if (!host) return; host.innerHTML = '';
+    if (!enabled || !(score > 0)) return;
+    ensureCss(); const box = document.createElement('div'); box.className = 'lb-offer'; box.innerHTML = '🏆 英雄榜 · 查询中…'; host.appendChild(box);
+    const showLink = () => `<a class="lb-view">查看榜单</a>`;
+    const bind = () => { const a = box.querySelector('.lb-view'); if (a) a.onclick = () => show(game, boards || board, fmt, title); };
+    fetchList(game, board).then(j => {
+      if (!qualifies(j.list, j.dir, score)) { box.innerHTML = `本局 <b>${esc(fmt(score, { meta }))}</b> 未进前 ${CAP} 名 · ${showLink()}`; bind(); return; }
+      const rankGuess = j.list.filter(e => j.dir === 'desc' ? e.score >= score : e.score <= score).length + 1;
+      box.innerHTML = `🎉 <b>${esc(fmt(score, { meta }))}</b> 能排到第 <b>${rankGuess}</b> 名！留个名字上榜：<div class="row"><input maxlength="12" placeholder="你的名字（最多 12 字）" value="${esc(getName())}"><button>留名上榜</button></div>`;
+      const inp = box.querySelector('input'), btn = box.querySelector('button');
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); }); inp.addEventListener('keyup', e => e.stopPropagation());
+      btn.onclick = async () => {
+        const name = inp.value.trim(); if (!name) { inp.focus(); return; } setName(name); btn.disabled = true; btn.textContent = '提交中…';
+        try { const r = await submit(game, board, name, score, meta); box.innerHTML = `<span class="ok">✔ 上榜成功，第 ${r.rank} 名！</span> ${showLink()}`; bind(); }
+        catch (e) { btn.disabled = false; btn.textContent = '重试'; const m = /too many/.test(e.message) ? '提交太频繁，稍后再试' : /range/.test(e.message) ? '成绩不在合理范围' : '提交失败'; let t = box.querySelector('.lb-err'); if (!t) { t = document.createElement('div'); t.className = 'lb-err'; box.appendChild(t); } t.textContent = m; }
+      };
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+    }).catch(() => { box.innerHTML = '🏆 英雄榜暂时打不开'; });
+  }
+  return { enabled, show, offer, getName, fetchList, submit, CAP };
+})();
+/* @lb-end */
+const Q = new URLSearchParams(location.search);
+const STILL = parseInt(Q.get('still') || '0', 10) || 0, SEED = parseInt(Q.get('seed') || '0', 10) || 0;
+let _s = (SEED || (Date.now() & 0x7fffffff)) >>> 0;
+const rnd = () => { _s = (_s + 0x6d2b79f5) >>> 0; let t = _s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+const rint = n => Math.floor(rnd() * n);
+const KEY = 'gh:2048:';
+const store = { get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} } };
+const SFX = (() => { let ac = null, muted = store.get('mute', false);
+  const ctx = () => { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); return ac; };
+  const tone = (f, d = 0.08, type = 'sine', v = 0.16, f2) => { if (muted) return; const a = ctx(); if (!a) return; const o = a.createOscillator(), g = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, a.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, a.currentTime + d); g.gain.setValueAtTime(v, a.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + d); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + d + 0.02); };
+  return { tone, get muted() { return muted; }, toggle() { muted = !muted; store.set('mute', muted); return muted; }, unlock() { ctx(); } };
+})();
+const $ = s => document.querySelector(s);
+const cv = $('#cv'), ctx = cv.getContext('2d');
+const N = 4;
+let tiles = [], score = 0, best = store.get('best', 0), won = false, over = false, undo = [], nextId = 1, keepGoing = false;
+let animStart = -1e9, looping = false; const ANIM = 110;
+const busy = () => performance.now() - animStart < ANIM + 140;
+let pending = null, pendingT = 0;
+const settle = () => { if (!pending) return; const f = pending; pending = null; clearTimeout(pendingT); f(); };
+let side = 400, pad = 12, cell = 80;
+
+const COLORS = { 2: ['#eee4da', '#776e65'], 4: ['#ede0c8', '#776e65'], 8: ['#f2b179', '#f9f6f2'], 16: ['#f59563', '#f9f6f2'], 32: ['#f67c5f', '#f9f6f2'], 64: ['#f65e3b', '#f9f6f2'], 128: ['#edcf72', '#f9f6f2'], 256: ['#edcc61', '#f9f6f2'], 512: ['#edc850', '#f9f6f2'], 1024: ['#edc53f', '#f9f6f2'], 2048: ['#edc22e', '#f9f6f2'] };
+const colorOf = v => COLORS[v] || ['#3c3a32', '#f9f6f2'];
+
+function layout() {
+  const st = $('.stage'); const w = st.clientWidth - 20, h = st.clientHeight - 18;
+  side = Math.max(240, Math.min(500, w, h));
+  pad = Math.round(side * 0.028); cell = (side - pad * (N + 1)) / N;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  cv.style.width = cv.style.height = side + 'px'; cv.width = cv.height = Math.round(side * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+const pos = i => pad + i * (cell + pad);
+const grid = () => { const g = Array.from({ length: N }, () => Array(N).fill(null)); for (const t of tiles) if (!t.dead) g[t.r][t.c] = t; return g; };
+const emptyCells = () => { const g = grid(), e = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!g[r][c]) e.push([r, c]); return e; };
+function spawn(n = 1) {
+  for (let i = 0; i < n; i++) { const e = emptyCells(); if (!e.length) return; const [r, c] = e[rint(e.length)]; tiles.push({ id: nextId++, v: rnd() < 0.9 ? 2 : 4, r, c, pr: r, pc: c, born: 1, bornAt: performance.now(), pop: 0 }); }
+  loop();
+}
+function snapshot() { return { t: tiles.filter(t => !t.dead).map(t => [t.v, t.r, t.c]), s: score }; }
+function restore(sn) { tiles = sn.t.map(([v, r, c]) => ({ id: nextId++, v, r, c, pr: r, pc: c, born: 0, pop: 0 })); score = sn.s; }
+function save() { store.set('state', over ? null : { ...snapshot(), won, keepGoing }); store.set('best', best); }
+function newGame() { settle(); tiles = []; score = 0; over = false; won = false; keepGoing = false; undo = []; spawn(2); hideOv(); updateHud(); save(); draw(); }
+
+function canMove() { const g = grid(); for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const t = g[r][c]; if (!t) return true; if (c + 1 < N && g[r][c + 1] && g[r][c + 1].v === t.v) return true; if (r + 1 < N && g[r + 1][c] && g[r + 1][c].v === t.v) return true; } return false; }
+
+function move(dir) { // 0 左 1 上 2 右 3 下
+  if (over || performance.now() - animStart < 70) return;
+  settle();
+  tiles = tiles.filter(t => !t.dead);
+  const g = grid(); const before = snapshot(); let moved = false, gained = 0, maxMerge = 0;
+  for (const t of tiles) { t.pr = t.r; t.pc = t.c; t.born = 0; t.pop = 0; t.merged = false; }
+  for (let i = 0; i < N; i++) {
+    const line = [];
+    for (let j = 0; j < N; j++) {
+      const r = dir === 1 ? j : dir === 3 ? N - 1 - j : i, c = dir === 0 ? j : dir === 2 ? N - 1 - j : i;
+      if (g[r][c]) line.push(g[r][c]);
+    }
+    const out = []; let last = null;
+    for (const t of line) {
+      if (last && last.v === t.v && !last.merged) { last.v *= 2; last.merged = true; last.pop = 1; t.dead = true; t.tr = last; gained += last.v; maxMerge = Math.max(maxMerge, last.v); }
+      else { out.push(t); last = t; }
+    }
+    out.forEach((t, j) => {
+      const r = dir === 1 ? j : dir === 3 ? N - 1 - j : i, c = dir === 0 ? j : dir === 2 ? N - 1 - j : i;
+      if (t.r !== r || t.c !== c) moved = true; t.r = r; t.c = c;
+    });
+    for (const t of line) if (t.dead) { t.r = t.tr.r; t.c = t.tr.c; moved = true; }
+  }
+  if (!moved) { tiles = tiles.filter(t => !t.dead); return; }
+  undo.push(before); if (undo.length > 10) undo.shift();
+  score += gained; if (score > best) best = score;
+  if (maxMerge) SFX.tone(220 + Math.log2(maxMerge) * 60, 0.09, 'triangle', 0.14, 260 + Math.log2(maxMerge) * 80); else SFX.tone(140, 0.04, 'sine', 0.06);
+  animStart = performance.now(); loop();
+  pending = () => {
+    tiles = tiles.filter(t => !t.dead); spawn();
+    if (!won && !keepGoing && tiles.some(t => t.v >= 2048)) { won = true; SFX.tone(660, 0.3, 'square', 0.12, 1320); showWin(); }
+    if (!canMove()) { over = true; SFX.tone(200, 0.4, 'sawtooth', 0.1, 60); showOver(); }
+    updateHud(); save();
+  };
+  pendingT = setTimeout(settle, ANIM);
+}
+function doUndo() { if (!undo.length) return; settle(); restore(undo.pop()); over = false; hideOv(); updateHud(); save(); draw(); SFX.tone(300, 0.06, 'sine', 0.08, 200); }
+
+function updateHud() { const s = $('#score'); if (s.textContent !== String(score)) { s.textContent = score; s.classList.remove('bump'); void s.offsetWidth; s.classList.add('bump'); } $('#best').textContent = best; $('#btnUndo').disabled = !undo.length; $('#btnUndo').style.opacity = undo.length ? 1 : .5; }
+function showOv(t, p, btns) { $('#ovT').textContent = t; $('#ovP').textContent = p; const b = $('#ovB'); b.innerHTML = ''; $('#ovLB').innerHTML = ''; for (const [label, fn, ghost] of btns) { const el = document.createElement('button'); el.textContent = label; if (ghost) el.className = 'ghost'; el.onclick = fn; b.appendChild(el); } $('#ov').hidden = false; }
+function hideOv() { $('#ov').hidden = true; }
+function showOver() { showOv('游戏结束', `本局 ${score} 分 · 最高 ${best} 分`, [['再来一局', newGame], ...(undo.length ? [['撤销一步', doUndo, true]] : [])]); LB.offer($('#ovLB'), { game: '2048', board: 'score', score, fmt: lbFmt }); }
+function showWin() { showOv('🎉 合出 2048！', `本局 ${score} 分，继续冲更大的数字吗？`, [['继续', () => { keepGoing = true; hideOv(); save(); }], ['新局', newGame, true]]); }
+
+const ease = t => 1 - Math.pow(1 - t, 3);
+let needMore = false;
+function draw(now = performance.now()) {
+  const p = Math.max(0, Math.min(1, (now - animStart) / ANIM)), k = ease(p);
+  needMore = false;
+  ctx.clearRect(0, 0, side, side);
+  ctx.fillStyle = '#bbada0'; rr(0, 0, side, side, side * 0.02); ctx.fill();
+  ctx.fillStyle = '#cdc1b4';
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { rr(pos(c), pos(r), cell, cell, cell * 0.08); ctx.fill(); }
+  const order = tiles.slice().sort((a, b) => (a.dead ? 0 : 1) - (b.dead ? 0 : 1));
+  for (const t of order) {
+    const x = pos(t.pc) + (pos(t.c) - pos(t.pc)) * k, y = pos(t.pr) + (pos(t.r) - pos(t.pr)) * k;
+    let sc = 1; const v = t.v;
+    if (!t.dead) {
+      if (t.pop) { if (p >= 1) { const q = Math.min(1, (now - animStart - ANIM) / 130); sc = 1 + 0.18 * Math.sin(q * Math.PI); if (q < 1) needMore = true; else t.pop = 0; } }
+      if (t.born) { const q = Math.min(1, (now - t.bornAt) / 130); sc = ease(q); if (q < 1) needMore = true; else t.born = 0; }
+    }
+    if (sc <= 0.02) continue;
+    const [bg, fg] = colorOf(v), s = cell * sc, off = (cell - s) / 2;
+    if (v >= 128) { ctx.shadowColor = 'rgba(243,215,116,.55)'; ctx.shadowBlur = v >= 1024 ? 24 : 12; }
+    ctx.fillStyle = bg; rr(x + off, y + off, s, s, s * 0.08); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = fg; const digits = String(v).length; ctx.font = `900 ${Math.round(s * (digits <= 2 ? 0.5 : digits === 3 ? 0.42 : 0.34))}px "Segoe UI",Roboto,Arial,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(v, x + cell / 2, y + cell / 2 + s * 0.03);
+  }
+}
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function loop() { if (looping || STILL) return; looping = true; requestAnimationFrame(tick); }
+function tick(now) {
+  draw(now);
+  if (busy() || needMore) requestAnimationFrame(tick); else { looping = false; draw(); }
+}
+
+// 输入
+const KEYS = { ArrowLeft: 0, a: 0, A: 0, ArrowUp: 1, w: 1, W: 1, ArrowRight: 2, d: 2, D: 2, ArrowDown: 3, s: 3, S: 3 };
+window.addEventListener('keydown', e => { SFX.unlock(); if (e.key in KEYS) { e.preventDefault(); move(KEYS[e.key]); } else if (e.key === 'z' || e.key === 'Z') doUndo(); else if (e.key === 'r' || e.key === 'R') newGame(); });
+let sx = 0, sy = 0, sw = false;
+cv.addEventListener('pointerdown', e => { SFX.unlock(); sx = e.clientX; sy = e.clientY; sw = true; cv.setPointerCapture(e.pointerId); e.preventDefault(); });
+cv.addEventListener('pointermove', e => { if (!sw) return; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.hypot(dx, dy) < 24) return; sw = false; move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 2 : 0) : (dy > 0 ? 3 : 1)); });
+cv.addEventListener('pointerup', () => { sw = false; }); cv.addEventListener('pointercancel', () => { sw = false; });
+$('#btnNew').onclick = newGame; $('#btnUndo').onclick = doUndo;
+const LBB = 'score', lbFmt = v => v + ' 分';
+$('#btnLB').onclick = () => LB.show('2048', LBB, lbFmt);
+const muteBtn = $('#btnMute'); const syncMute = () => muteBtn.textContent = SFX.muted ? '🔇' : '🔊'; muteBtn.onclick = () => { SFX.toggle(); syncMute(); }; syncMute();
+window.addEventListener('resize', layout);
+
+// 启动：截图定帧 / 续档 / 新局
+if (STILL) {
+  const demo = [[2, 0, 0], [8, 0, 1], [1024, 0, 2], [512, 0, 3], [4, 1, 0], [128, 1, 1], [256, 1, 2], [64, 1, 3], [2, 2, 0], [32, 2, 1], [16, 2, 2], [8, 2, 3], [4, 3, 1], [2, 3, 3]];
+  restore({ t: demo, s: 13160 }); best = Math.max(best, 20520); updateHud(); document.title = 'STILL-READY';
+} else {
+  const st = store.get('state', null);
+  if (st && st.t && st.t.length) { restore(st); won = !!st.won; keepGoing = !!st.keepGoing; if (!canMove()) { over = true; showOver(); } }
+  else { spawn(2); }
+  updateHud();
+}
+layout(); requestAnimationFrame(layout);
+</script>
+</body>
+</html>
