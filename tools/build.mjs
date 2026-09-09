@@ -22,6 +22,17 @@ const kb = n => n >= 1024 * 1024 ? (n / 1048576).toFixed(1) + ' MB' : Math.round
 const ymd = iso => iso ? iso.slice(0, 10) : '';
 const catOf = g => CATS.find(c => c.id === g.cat) || CATS[0];
 const YEAR = new Date().getFullYear();
+const OG_IMG = `${ORIGIN}/og.png`;   // 1200×630 站点分享图(tools/make-og.mjs 生成),给 /hall/ 用;首页 og:image 用招牌游戏截图(1200×750)
+const ORG_ID = 'https://satloot.com/#organization';
+const ORG = { '@type': 'Organization', '@id': ORG_ID, name: 'satloot', url: 'https://satloot.com/', sameAs: [S.github] };
+// JSON-LD 里的 < 转义成 \u003c,免得条目文本里出现 </script> 把页面截断
+const ld = obj => JSON.stringify(obj).replace(/</g, '\\u003c');
+/** meta description:前缀 + 尽量多的名字 + 后缀,总长不超过 max(SEO 建议 80–160 字符);suffix(k) 拿到实际塞进去的名字数 */
+const clampNames = (prefix, names, sep, suffix, max = 158) => {
+  const used = [];
+  for (const n of names) { if ((prefix + [...used, n].join(sep) + suffix(used.length + 1)).length > max) break; used.push(n); }
+  return prefix + used.join(sep) + suffix(used.length);
+};
 
 // ---------- 两种语言的界面文案 ----------
 const LOCALES = {
@@ -29,7 +40,9 @@ const LOCALES = {
     en: false, code: 'zh', htmlLang: 'zh-CN', dir: '', ogLocale: 'zh_CN', currency: 'CNY',
     other: 'en', otherHtmlLang: 'en', otherLabel: 'EN', otherDir: 'en/',
     siteTitle: S.title, tagline: S.tagline, taglineAlt: S.taglineEn,
-    metaDesc: names => `${S.tagline}：${names.join('、')}。${S.taglineEn}`,
+    ogLocaleAlt: 'en_US',
+    docTitle: `${S.title} · ${S.tagline}`,
+    metaDesc: names => clampNames(`${S.tagline}：`, names, '、', k => `${k < names.length ? '等' : '，共'} ${names.length} 款，免费、无广告、不登录。`),
     ogTitle: `${S.title} · ${S.titleEn}`,
     nav: { games: '游戏', hall: '🏆 英雄榜', about: '关于', github: 'GitHub ↗' },
     themeTitle: '切换深色 / 浅色',
@@ -55,7 +68,7 @@ const LOCALES = {
     handleTitle: '显示工具栏', nogame: '没有这个游戏。', backHome: '← 回游戏厅',
     helpNote: '存档在本机浏览器 · Esc 一般为暂停 · 鼠标贴到最顶边或点顶部小把手可呼出工具栏',
     // /hall/ 英雄榜
-    hallTitle: '英雄榜', hallMeta: names => `${S.title}英雄榜：${names.join('、')} 各难度前 20 名玩家。`,
+    hallTitle: '英雄榜', hallMeta: names => clampNames(`${S.title}英雄榜：`, names, '、', k => `${k < names.length ? ' 等' : ''} ${names.length} 款游戏各难度前 20 名玩家，打出新纪录可留名上榜。`),
     hallSub: '各游戏各难度前 20 名。打出新纪录时，结算面板里可以留下名字上榜；数据每次打开实时拉取。',
     goPlay: '▶ 去玩', loading: '加载中…',
     hallNote: '榜单只收合理范围内的成绩，同一 IP 每 10 分钟最多上榜 12 次；名字最多 12 个字。数独用了提示的成绩不计入。',
@@ -66,7 +79,9 @@ const LOCALES = {
     en: true, code: 'en', htmlLang: 'en', dir: 'en/', ogLocale: 'en_US', currency: 'USD',
     other: 'zh', otherHtmlLang: 'zh-CN', otherLabel: '中文', otherDir: '',
     siteTitle: S.titleEn || S.title, tagline: S.taglineEn || S.tagline, taglineAlt: '',
-    metaDesc: names => `${S.taglineEn} ${names.join(', ')}.`,
+    ogLocaleAlt: 'zh_CN',
+    docTitle: `${S.titleEn || S.title} · Tiny free browser games, click and play`,
+    metaDesc: names => clampNames('Tiny single-file browser games from GitHub: ', names, ', ', k => `${k < names.length ? ' and more' : ''}. ${names.length} free games, no ads, no sign-up.`),
     ogTitle: `${S.titleEn || S.title}`,
     nav: { games: 'Games', hall: '🏆 Hall of Fame', about: 'About', github: 'GitHub ↗' },
     themeTitle: 'Toggle dark / light',
@@ -90,7 +105,7 @@ const LOCALES = {
     helpTitle: 'Controls', helpLbl: 'Controls', fsLbl: 'Fullscreen', fsExit: 'Exit fullscreen', rawTitle: 'Open the raw game file in a new tab', rawLbl: 'New tab', srcLbl: 'Source',
     handleTitle: 'Show toolbar', nogame: 'No such game.', backHome: '← Back to the arcade',
     helpNote: 'Saves live in this browser · Esc usually pauses · move the mouse to the top edge or tap the handle to show the toolbar',
-    hallTitle: 'Hall of Fame', hallMeta: names => `${S.titleEn || S.title} hall of fame: top 20 players per difficulty in ${names.join(', ')}.`,
+    hallTitle: 'Hall of Fame', hallMeta: names => clampNames(`${S.titleEn || S.title} hall of fame: top 20 per difficulty in `, names, ', ', k => `${k < names.length ? ' and more' : ''}. Set a record and leave your name.`),
     hallSub: 'Top 20 per game and difficulty. Set a new record and the results panel lets you leave your name; data is fetched live on every visit.',
     goPlay: '▶ Play', loading: 'Loading…',
     hallNote: 'Only scores within a sane range are accepted; one IP may post at most 12 entries per 10 minutes; names are up to 12 characters. Sudoku runs that used hints do not count.',
@@ -171,23 +186,29 @@ function indexPage(L) {
   }).join('\n');
 
   const url = `${ORIGIN}/${L.dir}`;
-  const jsonld = {
-    '@context': 'https://schema.org', '@type': 'ItemList', name: L.siteTitle, url, inLanguage: L.htmlLang,
+  const hero = m.games.find(g => g.featured) || m.games[0];
+  const heroImg = `${ORIGIN}/shots/${hero.id}.jpg`;
+  const desc = L.metaDesc(m.games.map(T));
+  const jsonld = { '@context': 'https://schema.org', '@graph': [
+    ORG,
+    { '@type': 'WebSite', '@id': `${url}#website`, url, name: L.siteTitle, alternateName: L.en ? S.title : S.titleEn, description: L.tagline, inLanguage: L.htmlLang, publisher: { '@id': ORG_ID } },
+    { '@type': 'WebPage', '@id': url, url, name: L.docTitle, description: desc, inLanguage: L.htmlLang, isPartOf: { '@id': `${url}#website` }, primaryImageOfPage: { '@type': 'ImageObject', url: heroImg, width: 1200, height: 750 } },
+    { '@type': 'ItemList', name: L.siteTitle, url, inLanguage: L.htmlLang, numberOfItems: m.games.length,
     itemListElement: m.games.map((g, i) => ({
       '@type': 'ListItem', position: i + 1,
       item: { '@type': 'VideoGame', name: T(g), alternateName: L.en ? g.title : g.titleEn, url: `${ORIGIN}/${L.dir}play/?g=${g.id}`, image: `${ORIGIN}/shots/${g.id}.jpg`,
         description: pick(L, g, 'desc'), genre: catName(L, catOf(g)), gamePlatform: 'Web browser', applicationCategory: 'Game', operatingSystem: 'Any', inLanguage: 'zh-CN',
         offers: { '@type': 'Offer', price: '0', priceCurrency: L.currency } },
-    })),
-  };
+    })) },
+  ] };
 
   return `<!doctype html>
 <html lang="${L.htmlLang}">
 <head>
 <meta charset="utf-8">
 ${L.en ? '' : LANG_REDIRECT + '\n'}<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${esc(L.siteTitle)} · ${esc(L.tagline)}</title>
-<meta name="description" content="${esc(L.metaDesc(m.games.map(T)))}">
+<title>${esc(L.docTitle)}</title>
+<meta name="description" content="${esc(desc)}">
 <link rel="canonical" href="${url}">
 ${altLinks('')}
 <link rel="icon" href="${FAVICON}">
@@ -198,9 +219,16 @@ ${altLinks('')}
 <meta property="og:description" content="${esc(L.tagline)}">
 <meta property="og:url" content="${url}">
 <meta property="og:locale" content="${L.ogLocale}">
-<meta property="og:image" content="${ORIGIN}/shots/${(m.games.find(g => g.featured) || m.games[0]).id}.jpg">
+<meta property="og:locale:alternate" content="${L.ogLocaleAlt}">
+<meta property="og:image" content="${heroImg}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="750">
+<meta property="og:image:alt" content="${esc(L.shotAlt(T(hero)))}">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">${JSON.stringify(jsonld)}</script>
+<meta name="twitter:title" content="${esc(L.ogTitle)}">
+<meta name="twitter:description" content="${esc(L.tagline)}">
+<meta name="twitter:image" content="${heroImg}">
+<script type="application/ld+json">${ld(jsonld)}</script>
 ${THEME_BOOT}
 <style>
 :root{--bg:#ffffff;--bg2:#f6f7fb;--card:#ffffff;--card2:#f1f3f8;--line:#e6e9f0;--line2:#cfd5e1;--text:#141826;--muted:#5b647a;--dim:#8a93a8;
@@ -401,7 +429,7 @@ function playPage(L) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>${esc(L.siteTitle)}</title>
+<title>${esc(L.frameTitle)} · ${esc(L.siteTitle)}</title>
 <meta name="robots" content="noindex">
 <link rel="alternate" hreflang="zh-CN" href="${ORIGIN}/play/">
 <link rel="alternate" hreflang="en" href="${ORIGIN}/en/play/">
@@ -518,23 +546,43 @@ function hallPage(L) {
   const hallGames = m.games.filter(g => g.boards && g.boards.length);
   const T = g => pick(L, g, 'title');
   const url = `${ORIGIN}/${L.dir}hall/`;
+  const site = `${ORIGIN}/${L.dir}`;
+  const title = `${L.hallTitle} · ${L.siteTitle}`;
+  const desc = L.hallMeta(hallGames.map(T));
+  const jsonld = { '@context': 'https://schema.org', '@graph': [
+    ORG,
+    { '@type': 'WebSite', '@id': `${site}#website`, url: site, name: L.siteTitle, inLanguage: L.htmlLang, publisher: { '@id': ORG_ID } },
+    { '@type': 'WebPage', '@id': url, url, name: title, description: desc, inLanguage: L.htmlLang, isPartOf: { '@id': `${site}#website` }, primaryImageOfPage: { '@type': 'ImageObject', url: OG_IMG, width: 1200, height: 630 } },
+    { '@type': 'ItemList', name: title, url, inLanguage: L.htmlLang, numberOfItems: hallGames.length,
+      itemListElement: hallGames.map((g, i) => ({ '@type': 'ListItem', position: i + 1, item: { '@type': 'VideoGame', name: T(g), url: `${site}play/?g=${g.id}`, image: `${ORIGIN}/shots/${g.id}.jpg` } })) },
+  ] };
   return `<!doctype html>
 <html lang="${L.htmlLang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>${esc(L.hallTitle)} · ${esc(L.siteTitle)}</title>
-<meta name="description" content="${esc(L.hallMeta(hallGames.map(T)))}">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
 <link rel="canonical" href="${url}">
 ${altLinks('hall/')}
 <link rel="icon" href="${FAVICON}">
 <meta name="theme-color" content="#ffffff">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(L.siteTitle)}">
-<meta property="og:title" content="${esc(L.hallTitle)} · ${esc(L.siteTitle)}">
+<meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(L.hallSub)}">
 <meta property="og:url" content="${url}">
 <meta property="og:locale" content="${L.ogLocale}">
+<meta property="og:locale:alternate" content="${L.ogLocaleAlt}">
+<meta property="og:image" content="${OG_IMG}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${esc(L.siteTitle)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(L.hallSub)}">
+<meta name="twitter:image" content="${OG_IMG}">
+<script type="application/ld+json">${ld(jsonld)}</script>
 ${THEME_BOOT}
 <style>
 :root{--bg:#ffffff;--card:#ffffff;--card2:#f1f3f8;--line:#e6e9f0;--line2:#cfd5e1;--text:#141826;--muted:#5b647a;--dim:#8a93a8;--accent:#ff6a3d;--accent2:#d98f00;--chipbg:#fff;--shadow:0 12px 30px -18px rgba(20,24,38,.28);--gold:#ffd166;--silver:#cfd6e4;--bronze:#e0a672}

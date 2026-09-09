@@ -11,6 +11,7 @@
 | `games/<id>/index.html` | **本站自制的游戏本体**（单文件，零外部请求）。清单里用 `local` 字段指向它 |
 | `tools/fetch.mjs` | 把每个游戏本体放到 `site/g/<id>/index.html`：远程的用 `gh` 从仓库拉（按提交 sha 判断是否重下），本地的直接复制（按内容 sha1）；版本信息记到 `upstream/meta.json` |
 | `tools/build.mjs` | 由清单生成首页 / `/play/` 壳 / `/hall/` 英雄榜，**中英各一套**（`site/` 与 `site/en/`），外加 `site/games.json`、robots、sitemap |
+| `tools/make-og.mjs` | 用 resvg + 系统字体生成 `site/og.png`（1200×630 站点分享图，进 git）；`/hall/` 的 og:image 用它，首页用招牌游戏截图 |
 | `tools/shots.mjs` | Edge 无头截封面 → `.shots-tmp/<id>.png`（要先起本地服务） |
 | `tools/shots-convert.py` | PNG → `site/shots/<id>.jpg`（1200×750）+ `<id>-s.jpg`（600 宽） |
 | `serve.js` | 本地预览 `site/`，默认 8795；`/dev/<id>/` 直接映射 `games/<id>/`，改本地游戏刷新即见 |
@@ -38,7 +39,8 @@
 
 - 游戏本体 `/g/<id>/` 只有一份（第三方单文件，不动），两种语言的壳都指向它；游戏内界面仍是它自己的语言。
 - 英文文案来自 `games.json` 的 `*En` 字段（`titleEn` / `descEn` / `tagsEn` / `controlsEn`、分类 `nameEn`、榜 `labelEn`、家族链接 `descEn`），缺了回落中文。界面固定文案（导航、按钮、页脚、说明）在 `tools/build.mjs` 顶部的 `LOCALES` 表里。
-- 每页带 `<html lang>`、canonical、hreflang（zh-CN / en / x-default=zh-CN）、`og:locale`；sitemap 里每个 URL 带两种语言的 alternate。
+- 每页带 `<html lang>`、canonical、hreflang（zh-CN / en / x-default=zh-CN）、`og:locale` + alternate、OG / Twitter 卡片（含 og:image 尺寸）、JSON-LD（`@graph`：Organization + WebSite + WebPage + ItemList）；`/play/` 是 noindex 的壳，只有 title；sitemap 里每个 URL 带两种语言的 alternate，不含 `/play/`。
+- title ≤ 60 字符、description 80–160 字符：description 由 `clampNames` 按长度截取游戏名（`LOCALES.*.metaDesc` / `hallMeta`）。
 - 首访语言：`/` 页首有一段小脚本，localStorage 没记过 `gh:lang` 且 `navigator.language` 不是 zh 开头就 `location.replace('/en/')`；点导航或页脚的语言切换（EN / 中文）会记下选择，之后不再自动跳。英文页不做反向跳转。
 - 验收：`node tools/build.mjs` 后 `site/en/index.html` 里含汉字的行只剩 JSON-LD 里的 `alternateName` 和两个「中文」切换链接（Git Bash 自带 grep 不认 UTF-8 区间，用 `LC_ALL=C.UTF-8 grep -c '[一-龥]'` 才准）。
 
