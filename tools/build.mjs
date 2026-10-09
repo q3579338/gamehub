@@ -206,6 +206,7 @@ function indexPage(L) {
 <html lang="${L.htmlLang}">
 <head>
 <meta charset="utf-8">
+<link rel="describedby" href="/llms.txt" type="text/plain">
 ${L.en ? '' : LANG_REDIRECT + '\n'}<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${esc(L.docTitle)}</title>
 <meta name="description" content="${esc(desc)}">
@@ -428,6 +429,7 @@ function playPage(L) {
 <html lang="${L.htmlLang}">
 <head>
 <meta charset="utf-8">
+<link rel="describedby" href="/llms.txt" type="text/plain">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>${esc(L.frameTitle)} · ${esc(L.siteTitle)}</title>
 <meta name="robots" content="noindex">
@@ -560,6 +562,7 @@ function hallPage(L) {
 <html lang="${L.htmlLang}">
 <head>
 <meta charset="utf-8">
+<link rel="describedby" href="/llms.txt" type="text/plain">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
@@ -673,6 +676,30 @@ for (const L of [LOCALES.zh, LOCALES.en]) {
   sizes.push(`/${L.dir}index.html ${(idx.length / 1024).toFixed(0)} KB, /${L.dir}play/ ${(ply.length / 1024).toFixed(0)} KB, /${L.dir}hall/ ${(hal.length / 1024).toFixed(0)} KB`);
 }
 
+const mdText = s => String(s ?? '').replace(/[\r\n]+/g, ' ').replace(/([\\\[\]])/g, '\\$1');
+fs.writeFileSync(path.join(SITE, 'llms.txt'), `# ${mdText(S.title)} / ${mdText(S.titleEn || S.title)}
+
+> 免费浏览器小游戏合集，按分类浏览，支持键盘或触屏；另有公开英雄榜。A collection of free browser games with category browsing and a public Hall of Fame.
+
+小游戏的进度和存档保存在当前浏览器中，换浏览器或清除站点数据可能丢失存档。部分游戏提供在线成绩榜。各游戏的操作说明见游戏目录；本文件的游戏列表与站点公开目录一起生成。
+
+## 网站入口 / Main pages
+
+- [中文游戏厅](${ORIGIN}/): 分类、搜索和全部游戏介绍。
+- [English arcade](${ORIGIN}/en/): English game descriptions and browsing.
+- [英雄榜 / Hall of Fame](${ORIGIN}/hall/): 支持排行榜的游戏成绩。
+- [English Hall of Fame](${ORIGIN}/en/hall/): Public game leaderboards.
+- [公开游戏目录 / Game catalog](${ORIGIN}/games.json): 游戏名称、描述、操作说明及页面地址。
+
+## 游戏 / Games
+
+${pub.map(g => `- [${mdText(g.title)}${g.titleEn && g.titleEn !== g.title ? ' / ' + mdText(g.titleEn) : ''}](${ORIGIN}${g.file}): ${mdText(g.desc)}`).join('\n')}
+
+## 其他公开资料 / Optional
+
+- [站点地图 / Sitemap](${ORIGIN}/sitemap.xml): 中英文游戏厅与英雄榜入口。
+- [项目总览 / satloot projects](https://satloot.com/): 站主的公开网站和项目。
+`);
 fs.writeFileSync(path.join(SITE, 'robots.txt'), `User-agent: *\nAllow: /\nDisallow: /play/\nDisallow: /en/play/\nSitemap: ${ORIGIN}/sitemap.xml\n`);
 const today = new Date().toISOString().slice(0, 10);
 const smAlt = sub => `<xhtml:link rel="alternate" hreflang="zh-CN" href="${ORIGIN}/${sub}"/><xhtml:link rel="alternate" hreflang="en" href="${ORIGIN}/en/${sub}"/><xhtml:link rel="alternate" hreflang="x-default" href="${ORIGIN}/${sub}"/>`;
